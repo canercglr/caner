@@ -1,0 +1,29 @@
+{
+  "name": "neuro-tr",
+  "version": "1.0.0",
+  "description": "Turkiye Sinir Bilim Arastirma Platformu",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:58330/git/canercglr/caner"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.4.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "gsap": "^3.13.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.181.2",
+    "vite": "^7.2.4"
+  }
+}

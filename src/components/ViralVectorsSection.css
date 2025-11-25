@@ -1,0 +1,258 @@
+.viral-section {
+  padding: 10rem 0;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #050a15 0%, var(--bg-dark) 100%);
+}
+
+.viral-header {
+  text-align: center;
+  margin-bottom: 5rem;
+}
+
+.viral-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.virus-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+}
+
+.virus-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+}
+
+.virus-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--virus-color);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.virus-card.active {
+  border-color: var(--virus-color);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.virus-3d {
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.virus-info h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.virus-info p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virus-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.virus-card.active .virus-indicator,
+.virus-card:hover .virus-indicator {
+  opacity: 1;
+}
+
+/* Virus Detail */
+.virus-detail {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.virus-detail-header {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  border-bottom: 1px solid var(--border);
+}
+
+.virus-detail-3d {
+  height: 250px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.virus-detail-title {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.virus-badge {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  width: fit-content;
+  margin-bottom: 1rem;
+}
+
+.virus-detail-title h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.virus-detail-title p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.virus-detail-content {
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.virus-detail-content h4 {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+
+.serotype-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.serotype-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.serotype-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.serotype-target {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.virus-advantages ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.virus-advantages li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.check-icon {
+  font-weight: bold;
+}
+
+.app-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.app-tag {
+  padding: 0.5rem 1rem;
+  border: 1px solid;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: all 0.3s ease;
+}
+
+.app-tag:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--text-primary);
+}
+
+.viral-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(200px);
+  opacity: 0.1;
+  bottom: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: background 0.5s ease;
+}
+
+@media (max-width: 1200px) {
+  .virus-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .virus-detail-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .virus-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .virus-detail-header {
+    grid-template-columns: 1fr;
+  }
+
+  .virus-detail-3d {
+    height: 180px;
+  }
+
+  .virus-detail-title h2 {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .virus-grid {
+    grid-template-columns: 1fr;
+  }
+}
