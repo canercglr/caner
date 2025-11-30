@@ -19,6 +19,8 @@ const progressText = document.getElementById('progressText');
 const downloadSection = document.getElementById('downloadSection');
 const videoPreview = document.getElementById('videoPreview');
 const downloadBtn = document.getElementById('downloadBtn');
+const imagePreviewSection = document.getElementById('imagePreviewSection');
+const imagePreviewImg = document.getElementById('imagePreview');
 
 const ctx = mainCanvas.getContext('2d');
 
@@ -67,6 +69,10 @@ imageInput.addEventListener('change', (e) => {
         const img = new Image();
         img.onload = () => {
             originalImage = img;
+
+            // Show image preview
+            imagePreviewImg.src = event.target.result;
+            imagePreviewSection.hidden = false;
 
             // Set canvas size to image size
             mainCanvas.width = img.width;
