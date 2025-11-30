@@ -367,8 +367,8 @@
 
             <div class="control-group">
                 <label for="edgeThreshold">Kenar Hassasiyeti:</label>
-                <input type="range" id="edgeThreshold" min="10" max="100" value="30">
-                <span id="edgeThresholdValue">30</span>
+                <input type="range" id="edgeThreshold" min="5" max="100" value="20">
+                <span id="edgeThresholdValue">20</span>
             </div>
 
             <div class="control-group">
@@ -498,18 +498,37 @@
             edgeThresholdValue.textContent = edgeThresholdSlider.value;
         });
 
-        // Sobel edge detection
+        // Sobel edge detection with improved sensitivity
         function detectEdges(imageData) {
             const width = imageData.width;
             const height = imageData.height;
             const data = imageData.data;
-            const threshold = parseInt(edgeThresholdSlider.value);
+            // Lower threshold = more edges detected
+            const threshold = parseInt(edgeThresholdSlider.value) * 0.5;
 
-            // Convert to grayscale
+            // Convert to grayscale with Gaussian blur to reduce noise
             const gray = new Float32Array(width * height);
             for (let i = 0; i < width * height; i++) {
                 const idx = i * 4;
                 gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+            }
+
+            // Simple 3x3 Gaussian blur
+            const blurred = new Float32Array(width * height);
+            const gaussKernel = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+            const gaussSum = 16;
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    let sum = 0;
+                    let ki = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            sum += gray[(y + ky) * width + (x + kx)] * gaussKernel[ki++];
+                        }
+                    }
+                    blurred[y * width + x] = sum / gaussSum;
+                }
             }
 
             // Sobel kernels
@@ -518,16 +537,16 @@
 
             const edges = [];
 
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
+            for (let y = 2; y < height - 2; y++) {
+                for (let x = 2; x < width - 2; x++) {
                     let gx = 0, gy = 0;
 
                     for (let ky = -1; ky <= 1; ky++) {
                         for (let kx = -1; kx <= 1; kx++) {
                             const idx = (y + ky) * width + (x + kx);
                             const kernelIdx = (ky + 1) * 3 + (kx + 1);
-                            gx += gray[idx] * sobelX[kernelIdx];
-                            gy += gray[idx] * sobelY[kernelIdx];
+                            gx += blurred[idx] * sobelX[kernelIdx];
+                            gy += blurred[idx] * sobelY[kernelIdx];
                         }
                     }
 
@@ -539,43 +558,75 @@
                 }
             }
 
+            console.log('Edges detected with threshold', threshold, ':', edges.length);
             return edges;
         }
 
-        // Connect edge points into strokes
+        // Connect edge points into strokes with improved algorithm
         function createStrokes(edges) {
             if (edges.length === 0) return [];
 
             const strokes = [];
             const used = new Set();
-            const maxDistance = 3;
+            const maxDistance = 5; // Increased for better connectivity
 
-            // Sort edges by position for better stroke creation
-            edges.sort((a, b) => a.y - b.y || a.x - b.x);
+            // Create a spatial index for faster neighbor lookup
+            const cellSize = maxDistance;
+            const grid = new Map();
 
             for (let i = 0; i < edges.length; i++) {
-                if (used.has(i)) continue;
+                const cellX = Math.floor(edges[i].x / cellSize);
+                const cellY = Math.floor(edges[i].y / cellSize);
+                const key = `${cellX},${cellY}`;
+                if (!grid.has(key)) grid.set(key, []);
+                grid.get(key).push(i);
+            }
 
-                const stroke = [edges[i]];
-                used.add(i);
+            // Get neighbors from spatial index
+            function getNeighbors(x, y) {
+                const neighbors = [];
+                const cellX = Math.floor(x / cellSize);
+                const cellY = Math.floor(y / cellSize);
 
-                let current = edges[i];
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const key = `${cellX + dx},${cellY + dy}`;
+                        if (grid.has(key)) {
+                            neighbors.push(...grid.get(key));
+                        }
+                    }
+                }
+                return neighbors;
+            }
+
+            // Sort edges by position for better stroke creation
+            const sortedIndices = Array.from({ length: edges.length }, (_, i) => i)
+                .sort((a, b) => edges[a].y - edges[b].y || edges[a].x - edges[b].x);
+
+            for (const startIdx of sortedIndices) {
+                if (used.has(startIdx)) continue;
+
+                const stroke = [edges[startIdx]];
+                used.add(startIdx);
+
+                let current = edges[startIdx];
                 let foundNext = true;
 
-                // Forward trace
+                // Forward trace using spatial index
                 while (foundNext) {
                     foundNext = false;
                     let bestIdx = -1;
                     let bestDist = maxDistance + 1;
 
-                    for (let j = 0; j < edges.length; j++) {
+                    const neighbors = getNeighbors(current.x, current.y);
+                    for (const j of neighbors) {
                         if (used.has(j)) continue;
 
                         const dx = edges[j].x - current.x;
                         const dy = edges[j].y - current.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
 
-                        if (dist < bestDist && dist <= maxDistance) {
+                        if (dist < bestDist && dist <= maxDistance && dist > 0) {
                             bestDist = dist;
                             bestIdx = j;
                         }
@@ -589,15 +640,20 @@
                     }
                 }
 
-                // Only keep strokes with more than 5 points
-                if (stroke.length > 5) {
+                // Keep shorter strokes too (minimum 3 points)
+                if (stroke.length >= 3) {
                     strokes.push(stroke);
                 }
             }
 
-            // Sort strokes by length (longer first for better visual effect)
-            strokes.sort((a, b) => b.length - a.length);
+            // Sort strokes by starting position for more natural drawing order
+            strokes.sort((a, b) => {
+                const aStart = a[0];
+                const bStart = b[0];
+                return aStart.y - bStart.y || aStart.x - bStart.x;
+            });
 
+            console.log('Total strokes created:', strokes.length, 'from', edges.length, 'edge points');
             return strokes;
         }
 
@@ -764,6 +820,32 @@
             reader.readAsDataURL(file);
         });
 
+        // Create simple scan-line drawing (fallback for when edges are not found)
+        function createScanlineStrokes(imageData) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const data = imageData.data;
+            const strokes = [];
+            const step = 2;
+
+            // Horizontal scan lines
+            for (let y = 0; y < height; y += step) {
+                let stroke = [];
+                for (let x = 0; x < width; x += 1) {
+                    const idx = (y * width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    stroke.push({ x, y, r, g, b, isColor: true });
+                }
+                if (stroke.length > 0) {
+                    strokes.push(stroke);
+                }
+            }
+
+            return strokes;
+        }
+
         // Animation function
         function animate(recording = false) {
             return new Promise((resolve) => {
@@ -778,13 +860,25 @@
                 let allStrokes = [];
                 let colorStrokes = [];
 
+                console.log('Draw style:', drawStyle);
+
                 if (drawStyle === 'outline' || drawStyle === 'full') {
                     edgePoints = detectEdges(originalImageData);
+                    console.log('Edge points found:', edgePoints.length);
                     allStrokes = createStrokes(edgePoints);
+                    console.log('Strokes created:', allStrokes.length);
+
+                    // Fallback: if too few strokes, use scanline method
+                    if (allStrokes.length < 10) {
+                        console.log('Using scanline fallback for outline');
+                        allStrokes = createScanlineStrokes(originalImageData);
+                    }
                 } else if (drawStyle === 'sketch') {
                     allStrokes = createSketchStrokes(originalImageData);
+                    console.log('Sketch strokes created:', allStrokes.length);
                 } else if (drawStyle === 'paint') {
                     allStrokes = createPaintStrokes(originalImageData);
+                    console.log('Paint strokes created:', allStrokes.length);
                 }
 
                 if (drawStyle === 'full') {
@@ -793,14 +887,19 @@
 
                 // Flatten strokes into draw commands
                 let drawCommands = [];
-                let phase = 'outline';
 
                 for (const stroke of allStrokes) {
                     for (let i = 0; i < stroke.length; i++) {
+                        const point = stroke[i];
                         drawCommands.push({
-                            ...stroke[i],
+                            x: point.x,
+                            y: point.y,
+                            r: point.r,
+                            g: point.g,
+                            b: point.b,
+                            isColor: point.isColor || false,
                             strokeStart: i === 0,
-                            phase: 'outline'
+                            phase: (drawStyle === 'paint' || point.isColor) ? 'color' : 'outline'
                         });
                     }
                 }
@@ -817,7 +916,20 @@
                     }
                 }
 
+                console.log('Total draw commands:', drawCommands.length);
+
                 const totalCommands = drawCommands.length;
+
+                if (totalCommands === 0) {
+                    alert('Cizilecek nokta bulunamadi! Farkli bir resim veya ayar deneyin.');
+                    isAnimating = false;
+                    stopBtn.disabled = true;
+                    previewBtn.disabled = false;
+                    recordBtn.disabled = false;
+                    resolve(false);
+                    return;
+                }
+
                 let currentIndex = 0;
 
                 // Clear canvas with background color
@@ -835,6 +947,7 @@
 
                 let lastFrameTime = 0;
                 let lastX = 0, lastY = 0;
+                let prevX = null, prevY = null;
 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -855,22 +968,30 @@
                         for (let i = currentIndex; i < endIndex; i++) {
                             const cmd = drawCommands[i];
 
-                            if (cmd.phase === 'outline' || drawStyle === 'sketch') {
+                            if (cmd.phase === 'color' || drawStyle === 'paint') {
+                                // Color/paint mode - draw colored pixels
+                                if (cmd.r !== undefined) {
+                                    ctx.fillStyle = `rgb(${cmd.r},${cmd.g},${cmd.b})`;
+                                } else {
+                                    ctx.fillStyle = penColorInput.value;
+                                }
+                                ctx.fillRect(cmd.x, cmd.y, drawStyle === 'paint' ? 8 : 2, drawStyle === 'paint' ? 8 : 2);
+                            } else {
+                                // Outline/sketch mode - draw lines
                                 ctx.strokeStyle = penColorInput.value;
                                 ctx.lineWidth = lineWidth;
 
-                                if (cmd.strokeStart) {
-                                    ctx.beginPath();
-                                    ctx.moveTo(cmd.x, cmd.y);
+                                if (cmd.strokeStart || prevX === null) {
+                                    prevX = cmd.x;
+                                    prevY = cmd.y;
                                 } else {
+                                    ctx.beginPath();
+                                    ctx.moveTo(prevX, prevY);
                                     ctx.lineTo(cmd.x, cmd.y);
                                     ctx.stroke();
-                                    ctx.beginPath();
-                                    ctx.moveTo(cmd.x, cmd.y);
+                                    prevX = cmd.x;
+                                    prevY = cmd.y;
                                 }
-                            } else if (cmd.phase === 'color' || drawStyle === 'paint') {
-                                ctx.fillStyle = `rgb(${cmd.r},${cmd.g},${cmd.b})`;
-                                ctx.fillRect(cmd.x, cmd.y, 8, 8);
                             }
 
                             lastX = cmd.x;
