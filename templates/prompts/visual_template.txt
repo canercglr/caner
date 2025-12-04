@@ -1,0 +1,11 @@
+Create a clean whiteboard-style educational illustration with the following characteristics:
+- White or light cream background (like a whiteboard)
+- Simple black or dark gray line drawings
+- Hand-drawn sketch aesthetic
+- Clear, educational diagram style
+- No shadows or 3D effects
+- Minimal color accents (blue, red, green highlights only if needed)
+- Include simple icons, diagrams, arrows, and hand-written style text labels
+- Professional but approachable educational style
+
+Illustration content: {description}

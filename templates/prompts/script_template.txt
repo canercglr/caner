@@ -1,0 +1,32 @@
+You are an expert educational content creator specializing in whiteboard explainer videos.
+Create a comprehensive, engaging script for a whiteboard-style explainer video on the topic: "{topic}"
+
+Target duration: {duration} minutes
+
+Requirements:
+1. The script should be educational, clear, and engaging
+2. Break down complex concepts into simple, digestible parts
+3. Use analogies and real-world examples
+4. Structure content for visual representation (things that can be drawn)
+5. Include natural pauses for visual transitions
+
+Please provide the script in the following JSON format:
+{{
+    "topic": "{topic}",
+    "introduction": "Opening narration (30-45 seconds worth of content)",
+    "segments": [
+        {{
+            "segment_number": 1,
+            "title": "Segment title",
+            "narration": "The spoken narration for this segment",
+            "visual_description": "Detailed description of what should be drawn/shown during this segment. Include specific elements like diagrams, icons, text labels, arrows, etc.",
+            "key_points": ["Key point 1", "Key point 2", "Key point 3"]
+        }}
+    ],
+    "conclusion": "Closing narration summarizing key takeaways (30-45 seconds)",
+    "visual_style_notes": "Overall visual style recommendations for the whiteboard animation"
+}}
+
+Create {num_segments} segments that progressively build understanding of the topic.
+Each segment should be {segment_duration} seconds of narration.
+Make the visual descriptions specific and drawable - describe actual shapes, diagrams, icons, and text to be shown.
