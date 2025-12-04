@@ -21,6 +21,7 @@ ASSETS_DIR.mkdir(exist_ok=True)
 # API Keys (loaded from environment variables)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Video Settings
 VIDEO_CONFIG = {
@@ -69,4 +70,18 @@ AI_CONFIG = {
     "image_model": "dall-e-3",
     "tts_model": "tts-1-hd",
     "tts_voice": "alloy",  # Options: alloy, echo, fable, onyx, nova, shimmer
+}
+
+# Gemini Model Settings (FREE alternative)
+GEMINI_CONFIG = {
+    "script_model": "gemini-1.5-flash",  # Free tier available
+    "pro_model": "gemini-1.5-pro",       # For complex scripts
+}
+
+# Free Mode Settings (no paid APIs required)
+FREE_MODE_CONFIG = {
+    "script_provider": "gemini",         # Use Gemini for scripts
+    "script_model": "gemini-1.5-flash",  # Free Gemini model
+    "visual_mode": "free",               # PIL-based visuals
+    "tts_provider": "gtts",              # Google TTS (free)
 }

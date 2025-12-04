@@ -46,6 +46,7 @@ class VisualGenerator:
 
     Supports:
     - AI image generation (DALL-E, etc.)
+    - Free mode (PIL-based whiteboard generation)
     - Image-to-sketch conversion
     - Text overlay rendering
     """
@@ -67,26 +68,33 @@ Illustration content: """
         self,
         api_key: Optional[str] = None,
         model: str = "dall-e-3",
-        image_size: str = "1792x1024"
+        image_size: str = "1792x1024",
+        free_mode: bool = False
     ):
         """
         Initialize the visual generator.
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (not needed for free_mode)
             model: Image generation model
             image_size: Output image size
+            free_mode: Use free PIL-based generation (no API needed)
         """
-        if OpenAI is None:
-            raise ImportError("OpenAI package not installed. Run: pip install openai")
         if Image is None:
             raise ImportError("Pillow package not installed. Run: pip install Pillow")
 
-        self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        self.free_mode = free_mode
         self.model = model
         self.image_size = image_size
+        self.client = None
 
-        logger.info(f"Initialized VisualGenerator with {model}")
+        if not free_mode:
+            if OpenAI is None:
+                raise ImportError("OpenAI package not installed. Run: pip install openai")
+            self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            logger.info(f"Initialized VisualGenerator with {model}")
+        else:
+            logger.info("Initialized VisualGenerator in FREE mode (PIL-based)")
 
     def generate_visual(
         self,
@@ -107,7 +115,14 @@ Illustration content: """
         Returns:
             GeneratedVisual object with image details
         """
-        # Construct the prompt
+        output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Generating visual for segment {segment_number}")
+
+        # Use free mode if enabled
+        if self.free_mode:
+            return self._generate_free_whiteboard(segment_number, description, output_dir)
+
+        # Construct the prompt for AI generation
         if style == "whiteboard":
             prompt = self.WHITEBOARD_PROMPT_PREFIX + description
         else:
@@ -115,8 +130,6 @@ Illustration content: """
 
         # Ensure prompt isn't too long
         prompt = prompt[:4000]
-
-        logger.info(f"Generating visual for segment {segment_number}")
 
         try:
             # Generate image using DALL-E
@@ -157,6 +170,209 @@ Illustration content: """
             logger.error(f"Failed to generate visual: {e}")
             # Create a placeholder image
             return self._create_placeholder(segment_number, description, output_dir)
+
+    def _generate_free_whiteboard(
+        self,
+        segment_number: int,
+        description: str,
+        output_dir: Path
+    ) -> GeneratedVisual:
+        """
+        Generate a whiteboard-style image using PIL (free, no API needed).
+
+        Creates a professional-looking whiteboard with:
+        - Key points extracted from description
+        - Simple shapes and icons
+        - Clean typography
+        """
+        width, height = 1920, 1080
+
+        # Create white background with slight texture
+        image = Image.new('RGB', (width, height), (252, 252, 250))
+        draw = ImageDraw.Draw(image)
+
+        # Load fonts
+        try:
+            title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            body_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+            small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+        except (IOError, OSError):
+            title_font = ImageFont.load_default()
+            body_font = title_font
+            small_font = title_font
+
+        # Colors for whiteboard style
+        dark_gray = (50, 50, 50)
+        blue = (66, 133, 244)
+        red = (234, 67, 53)
+        green = (52, 168, 83)
+        light_gray = (200, 200, 200)
+
+        # Draw subtle border
+        draw.rectangle([20, 20, width - 20, height - 20], outline=light_gray, width=2)
+
+        # Extract key points from description
+        key_points = self._extract_key_points(description)
+
+        # Draw segment indicator
+        draw.text((60, 40), f"#{segment_number}", fill=blue, font=small_font)
+
+        # Draw main content area
+        content_y = 100
+
+        # Draw a title derived from description
+        title = self._extract_title(description)
+        draw.text((width // 2, content_y), title, fill=dark_gray, font=title_font, anchor="mm")
+        content_y += 80
+
+        # Draw decorative line under title
+        draw.line([(width // 4, content_y), (3 * width // 4, content_y)], fill=blue, width=3)
+        content_y += 50
+
+        # Draw key points with bullet points and icons
+        colors = [blue, red, green, blue, red, green]
+        for i, point in enumerate(key_points[:6]):
+            point_y = content_y + i * 120
+
+            # Draw bullet circle
+            bullet_x = 100
+            draw.ellipse([bullet_x - 15, point_y - 15, bullet_x + 15, point_y + 15],
+                        fill=colors[i % len(colors)])
+
+            # Draw connecting line
+            if i < len(key_points) - 1:
+                draw.line([(bullet_x, point_y + 20), (bullet_x, point_y + 100)],
+                         fill=light_gray, width=2)
+
+            # Draw point text
+            # Wrap text if too long
+            wrapped_point = self._wrap_text(point, 60)
+            draw.text((bullet_x + 40, point_y), wrapped_point, fill=dark_gray, font=body_font, anchor="lm")
+
+            # Draw simple icon/shape on the right
+            icon_x = width - 200
+            self._draw_simple_icon(draw, icon_x, point_y, i, colors[i % len(colors)])
+
+        # Draw decorative elements
+        self._draw_decorative_elements(draw, width, height, light_gray)
+
+        # Save image
+        output_path = output_dir / f"segment_{segment_number:02d}.png"
+        image.save(output_path, "PNG")
+
+        logger.info(f"Free whiteboard visual saved to {output_path}")
+
+        return GeneratedVisual(
+            segment_number=segment_number,
+            image_path=output_path,
+            description=description,
+            width=width,
+            height=height
+        )
+
+    def _extract_key_points(self, description: str) -> List[str]:
+        """Extract key points from description text."""
+        import re
+
+        # Try to find bullet points or numbered items
+        points = re.findall(r'[-•*]\s*([^-•*\n]+)', description)
+        if points:
+            return [p.strip() for p in points if len(p.strip()) > 5]
+
+        # Split by sentences and take key ones
+        sentences = re.split(r'[.!?]', description)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
+
+        # Take first 5 meaningful sentences
+        return sentences[:5] if sentences else [description[:100]]
+
+    def _extract_title(self, description: str) -> str:
+        """Extract or generate a title from description."""
+        # Take first sentence or first 50 chars
+        import re
+        first_sentence = re.split(r'[.!?]', description)[0].strip()
+        if len(first_sentence) > 50:
+            return first_sentence[:47] + "..."
+        return first_sentence or "Key Concepts"
+
+    def _wrap_text(self, text: str, max_chars: int) -> str:
+        """Wrap text to fit within max characters per line."""
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+
+        for word in words:
+            if current_length + len(word) + 1 <= max_chars:
+                current_line.append(word)
+                current_length += len(word) + 1
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+                current_length = len(word)
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        return '\n'.join(lines[:2])  # Max 2 lines
+
+    def _draw_simple_icon(self, draw: ImageDraw, x: int, y: int, index: int, color: Tuple):
+        """Draw a simple icon based on index."""
+        icon_size = 40
+
+        if index % 6 == 0:
+            # Circle
+            draw.ellipse([x - icon_size, y - icon_size, x + icon_size, y + icon_size],
+                        outline=color, width=3)
+        elif index % 6 == 1:
+            # Square
+            draw.rectangle([x - icon_size, y - icon_size, x + icon_size, y + icon_size],
+                          outline=color, width=3)
+        elif index % 6 == 2:
+            # Triangle
+            draw.polygon([(x, y - icon_size), (x - icon_size, y + icon_size),
+                         (x + icon_size, y + icon_size)], outline=color, width=3)
+        elif index % 6 == 3:
+            # Star (simplified as asterisk shape)
+            for angle in range(0, 360, 60):
+                import math
+                rad = math.radians(angle)
+                x2 = x + int(icon_size * math.cos(rad))
+                y2 = y + int(icon_size * math.sin(rad))
+                draw.line([(x, y), (x2, y2)], fill=color, width=3)
+        elif index % 6 == 4:
+            # Arrow right
+            draw.line([(x - icon_size, y), (x + icon_size, y)], fill=color, width=3)
+            draw.line([(x + icon_size - 15, y - 15), (x + icon_size, y)], fill=color, width=3)
+            draw.line([(x + icon_size - 15, y + 15), (x + icon_size, y)], fill=color, width=3)
+        else:
+            # Checkmark
+            draw.line([(x - icon_size, y), (x - icon_size // 2, y + icon_size // 2)],
+                     fill=color, width=3)
+            draw.line([(x - icon_size // 2, y + icon_size // 2), (x + icon_size, y - icon_size)],
+                     fill=color, width=3)
+
+    def _draw_decorative_elements(self, draw: ImageDraw, width: int, height: int, color: Tuple):
+        """Draw subtle decorative elements."""
+        # Corner decorations
+        corner_size = 30
+
+        # Top-left corner
+        draw.line([(40, 40), (40, 40 + corner_size)], fill=color, width=2)
+        draw.line([(40, 40), (40 + corner_size, 40)], fill=color, width=2)
+
+        # Top-right corner
+        draw.line([(width - 40, 40), (width - 40, 40 + corner_size)], fill=color, width=2)
+        draw.line([(width - 40, 40), (width - 40 - corner_size, 40)], fill=color, width=2)
+
+        # Bottom-left corner
+        draw.line([(40, height - 40), (40, height - 40 - corner_size)], fill=color, width=2)
+        draw.line([(40, height - 40), (40 + corner_size, height - 40)], fill=color, width=2)
+
+        # Bottom-right corner
+        draw.line([(width - 40, height - 40), (width - 40, height - 40 - corner_size)], fill=color, width=2)
+        draw.line([(width - 40, height - 40), (width - 40 - corner_size, height - 40)], fill=color, width=2)
 
     def generate_all_visuals(
         self,

@@ -8,11 +8,16 @@ AI-generated scripts, visuals, and voiceovers.
 Usage:
     python main.py "Your Topic Here" [options]
 
-Example:
+Examples:
+    # Using OpenAI (paid)
     python main.py "How Machine Learning Works" --duration 5 --voice nova
+
+    # Using Gemini + Free Mode (FREE!)
+    python main.py "How Machine Learning Works" --free --gemini-key YOUR_KEY
 """
 import sys
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -27,8 +32,9 @@ except ImportError:
     sys.exit(1)
 
 from config import (
-    OUTPUT_DIR, OPENAI_API_KEY, ANTHROPIC_API_KEY,
-    VIDEO_CONFIG, AUDIO_CONFIG, SCRIPT_CONFIG, AI_CONFIG
+    OUTPUT_DIR, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY,
+    VIDEO_CONFIG, AUDIO_CONFIG, SCRIPT_CONFIG, AI_CONFIG,
+    GEMINI_CONFIG, FREE_MODE_CONFIG
 )
 from src.utils import create_project_directory, generate_project_id, save_json, format_time
 from src.script_generator import ScriptGenerator
@@ -51,31 +57,49 @@ class ExplainerVideoGenerator:
     Main class for generating explainer videos.
 
     Orchestrates the entire pipeline from topic to final video.
+    Supports both paid (OpenAI) and free (Gemini + PIL + gTTS) modes.
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         provider: str = "openai",
-        voice: str = "nova"
+        voice: str = "nova",
+        free_mode: bool = False
     ):
         """
         Initialize the video generator.
 
         Args:
             api_key: API key for AI services
-            provider: AI provider ("openai" or "anthropic")
+            provider: AI provider ("openai", "anthropic", or "gemini")
             voice: TTS voice to use
+            free_mode: Use completely free mode (Gemini + PIL + gTTS)
         """
-        self.api_key = api_key or OPENAI_API_KEY
-        self.provider = provider
+        self.provider = provider.lower()
         self.voice = voice
+        self.free_mode = free_mode
 
-        if not self.api_key:
-            raise ValueError(
-                "API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
+        # Set API key based on provider
+        if self.provider == "gemini":
+            self.api_key = api_key or GEMINI_API_KEY
+            if not self.api_key:
+                raise ValueError(
+                    "Gemini API key required. Set GEMINI_API_KEY environment variable "
+                    "or pass --gemini-key parameter.\n"
+                    "Get your FREE key at: https://aistudio.google.com/app/apikey"
+                )
+        elif self.provider == "anthropic":
+            self.api_key = api_key or ANTHROPIC_API_KEY
+            if not self.api_key:
+                raise ValueError("Anthropic API key required.")
+        else:  # openai
+            self.api_key = api_key or OPENAI_API_KEY
+            if not self.api_key and not free_mode:
+                raise ValueError(
+                    "API key required. Set OPENAI_API_KEY environment variable "
+                    "or use --free mode with Gemini."
+                )
 
     def generate(
         self,
@@ -108,10 +132,13 @@ class ExplainerVideoGenerator:
         project_id = generate_project_id(topic)
         dirs = create_project_directory(output_dir or OUTPUT_DIR, project_id)
 
+        mode_str = "[yellow]FREE MODE[/yellow]" if self.free_mode else f"[blue]{self.provider.upper()}[/blue]"
+
         console.print(Panel(
             f"[bold blue]Generating Explainer Video[/bold blue]\n\n"
             f"Topic: [green]{topic}[/green]\n"
             f"Duration: [yellow]{duration_minutes} minutes[/yellow]\n"
+            f"Mode: {mode_str}\n"
             f"Project ID: [dim]{project_id}[/dim]",
             title="Speed-Drawing Explainer"
         ))
@@ -180,11 +207,18 @@ class ExplainerVideoGenerator:
 
     def _generate_script(self, topic: str, duration: int, dirs: dict):
         """Generate the video script."""
-        generator = ScriptGenerator(
-            api_key=self.api_key,
-            model=AI_CONFIG["script_model"],
-            provider=self.provider
-        )
+        if self.free_mode or self.provider == "gemini":
+            generator = ScriptGenerator(
+                api_key=self.api_key,
+                model=GEMINI_CONFIG["script_model"],
+                provider="gemini"
+            )
+        else:
+            generator = ScriptGenerator(
+                api_key=self.api_key,
+                model=AI_CONFIG["script_model"],
+                provider=self.provider
+            )
 
         script = generator.generate(topic, duration_minutes=duration)
         generator.save_script(script, dirs["scripts"] / "script.json")
@@ -201,10 +235,14 @@ class ExplainerVideoGenerator:
 
     def _generate_visuals(self, script, dirs: dict, progress, task):
         """Generate visuals for all segments."""
-        generator = VisualGenerator(
-            api_key=self.api_key,
-            model=AI_CONFIG["image_model"]
-        )
+        if self.free_mode:
+            # Use free PIL-based generation
+            generator = VisualGenerator(free_mode=True)
+        else:
+            generator = VisualGenerator(
+                api_key=self.api_key if self.provider == "openai" else OPENAI_API_KEY,
+                model=AI_CONFIG["image_model"]
+            )
 
         visuals = []
 
@@ -262,12 +300,16 @@ class ExplainerVideoGenerator:
 
     def _generate_voiceovers(self, script, dirs: dict, progress, task):
         """Generate voiceovers for narration."""
-        generator = VoiceoverGenerator(
-            api_key=self.api_key,
-            provider="openai",
-            voice=self.voice,
-            model=AI_CONFIG["tts_model"]
-        )
+        if self.free_mode:
+            # Use free Google TTS
+            generator = VoiceoverGenerator(provider="gtts")
+        else:
+            generator = VoiceoverGenerator(
+                api_key=self.api_key if self.provider == "openai" else OPENAI_API_KEY,
+                provider="openai",
+                voice=self.voice,
+                model=AI_CONFIG["tts_model"]
+            )
 
         audios = []
 
@@ -402,6 +444,7 @@ class ExplainerVideoGenerator:
         table.add_row("Topic", script.topic)
         table.add_row("Segments", str(len(script.segments)))
         table.add_row("Est. Duration", format_time(script.total_duration))
+        table.add_row("Mode", "FREE" if self.free_mode else self.provider.upper())
         table.add_row("Output", str(output_path))
         table.add_row("Project Dir", str(dirs["root"]))
 
@@ -415,13 +458,16 @@ class ExplainerVideoGenerator:
 @click.option('--duration', '-d', default=5, help='Target video duration in minutes')
 @click.option('--voice', '-v', default='nova',
               type=click.Choice(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']),
-              help='TTS voice to use')
+              help='TTS voice to use (OpenAI only)')
 @click.option('--provider', '-p', default='openai',
-              type=click.Choice(['openai', 'anthropic']),
+              type=click.Choice(['openai', 'anthropic', 'gemini']),
               help='AI provider for script generation')
 @click.option('--output', '-o', type=click.Path(), help='Custom output directory')
 @click.option('--no-drawing', is_flag=True, help='Disable speed-drawing animation')
 @click.option('--api-key', envvar='OPENAI_API_KEY', help='OpenAI API key')
+@click.option('--gemini-key', envvar='GEMINI_API_KEY', help='Gemini API key (FREE)')
+@click.option('--free', 'free_mode', is_flag=True,
+              help='Use FREE mode (Gemini + PIL visuals + Google TTS)')
 @click.option('--skip-script', is_flag=True, help='Skip script generation (use existing)')
 @click.option('--skip-visuals', is_flag=True, help='Skip visual generation')
 @click.option('--skip-audio', is_flag=True, help='Skip audio generation')
@@ -434,6 +480,8 @@ def main(
     output: Optional[str],
     no_drawing: bool,
     api_key: Optional[str],
+    gemini_key: Optional[str],
+    free_mode: bool,
     skip_script: bool,
     skip_visuals: bool,
     skip_audio: bool,
@@ -444,14 +492,34 @@ def main(
 
     TOPIC: The subject to explain in the video.
 
-    Example:
+    \b
+    Examples:
+        # Using OpenAI (paid, high quality)
         python main.py "How Blockchain Works" --duration 5 --voice nova
+
+        # Using Gemini FREE mode
+        python main.py "How Blockchain Works" --free --gemini-key YOUR_KEY
+
+        # Just Gemini for scripts (still needs OpenAI for images/voice)
+        python main.py "How AI Works" --provider gemini --gemini-key YOUR_KEY
     """
     try:
+        # Determine the key to use
+        if free_mode:
+            key = gemini_key
+            prov = "gemini"
+        elif provider == "gemini":
+            key = gemini_key
+            prov = "gemini"
+        else:
+            key = api_key
+            prov = provider
+
         generator = ExplainerVideoGenerator(
-            api_key=api_key,
-            provider=provider,
-            voice=voice
+            api_key=key,
+            provider=prov,
+            voice=voice,
+            free_mode=free_mode
         )
 
         output_path = generator.generate(

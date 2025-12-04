@@ -21,6 +21,11 @@ try:
 except ImportError:
     anthropic = None
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 from .utils import estimate_duration, save_json
 
 logger = logging.getLogger(__name__)
@@ -73,7 +78,7 @@ class ScriptGenerator:
     """
     Generates educational video scripts using AI.
 
-    Supports OpenAI GPT and Anthropic Claude models.
+    Supports OpenAI GPT, Anthropic Claude, and Google Gemini models.
     """
 
     SCRIPT_PROMPT_TEMPLATE = """
@@ -123,7 +128,7 @@ Make the visual descriptions specific and drawable - describe actual shapes, dia
         Args:
             api_key: API key for the AI provider
             model: Model name to use
-            provider: AI provider ("openai" or "anthropic")
+            provider: AI provider ("openai", "anthropic", or "gemini")
         """
         self.model = model
         self.provider = provider.lower()
@@ -137,6 +142,11 @@ Make the visual descriptions specific and drawable - describe actual shapes, dia
             if anthropic is None:
                 raise ImportError("Anthropic package not installed. Run: pip install anthropic")
             self.client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+        elif self.provider == "gemini":
+            if genai is None:
+                raise ImportError("Google Generative AI package not installed. Run: pip install google-generativeai")
+            genai.configure(api_key=api_key)
+            self.client = genai.GenerativeModel(model or "gemini-1.5-flash")
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -220,6 +230,21 @@ Make the visual descriptions specific and drawable - describe actual shapes, dia
                 content = response.content[0].text
                 # Extract JSON from response
                 content = content.strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.startswith("```"):
+                    content = content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                return json.loads(content.strip())
+
+            elif self.provider == "gemini":
+                full_prompt = f"""You are an expert educational content creator. Always respond with valid JSON only, no additional text or markdown formatting.
+
+{prompt}"""
+                response = self.client.generate_content(full_prompt)
+                content = response.text.strip()
+                # Extract JSON from response (Gemini might wrap in markdown)
                 if content.startswith("```json"):
                     content = content[7:]
                 if content.startswith("```"):

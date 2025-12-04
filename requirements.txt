@@ -4,6 +4,7 @@
 # AI APIs
 openai>=1.0.0
 anthropic>=0.18.0
+google-generativeai>=0.3.0
 
 # Image Processing
 Pillow>=10.0.0
