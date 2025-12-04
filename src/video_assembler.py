@@ -174,7 +174,7 @@ class VideoAssembler:
         visual_path: Path,
         audio_path: Path,
         duration: float
-    ) -> CompositeVideoClip:
+    ):
         """Create a simple clip with static image and audio."""
         # Load image and audio
         image_clip = ImageClip(str(visual_path)).set_duration(duration)
@@ -193,7 +193,7 @@ class VideoAssembler:
         visual_path: Path,
         audio_path: Path,
         duration: float
-    ) -> CompositeVideoClip:
+    ):
         """
         Create a clip with speed-drawing reveal effect.
 
@@ -257,7 +257,7 @@ class VideoAssembler:
         title: str,
         duration: float = 3.0,
         subtitle: Optional[str] = None
-    ) -> CompositeVideoClip:
+    ):
         """Create a title card clip."""
         # Create background
         bg = ColorClip(
@@ -297,7 +297,7 @@ class VideoAssembler:
             # Fallback: create a simple image-based title card
             return self._create_image_title_card(title, duration)
 
-    def _create_image_title_card(self, title: str, duration: float) -> ImageClip:
+    def _create_image_title_card(self, title: str, duration: float):
         """Create a title card as an image (fallback method)."""
         if Image is None:
             raise ImportError("Pillow required for image-based title cards")
@@ -330,7 +330,7 @@ class VideoAssembler:
         self,
         duration: float = 3.0,
         text: str = "Thanks for watching!"
-    ) -> CompositeVideoClip:
+    ):
         """Create an end card clip."""
         return self._create_title_card_clip(text, duration)
 
