@@ -37,10 +37,15 @@ def main(argv=None) -> int:
                         help="number of scenes to generate (default: 4)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"Claude model id (default: {DEFAULT_MODEL})")
-    parser.add_argument("--tts", choices=["espeak", "none"], default="espeak",
-                        help="voiceover engine; 'none' produces a silent track")
-    parser.add_argument("--voice", default="en-US",
-                        help="espeak-ng voice (default: en-US)")
+    parser.add_argument("--tts", choices=["auto", "edge", "espeak", "none"],
+                        default="auto",
+                        help="voiceover engine: 'edge' = Microsoft neural voices "
+                             "(needs network), 'espeak' = offline, 'none' = silent, "
+                             "'auto' = edge with espeak/silence fallback (default)")
+    parser.add_argument("--voice", default=None,
+                        help="voice: a language code like 'en', 'tr', 'de' or a full "
+                             "Edge voice name like 'en-US-AriaNeural' "
+                             "(default: English)")
     parser.add_argument("--size", type=parse_size, default=(1280, 720),
                         help="video resolution WxH (default: 1280x720)")
     parser.add_argument("--fps", type=int, default=30, help="frames per second (default: 30)")

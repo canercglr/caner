@@ -161,6 +161,7 @@ def parse_svg_strokes(svg_text: str, canvas: Tuple[int, int]) -> List[Stroke]:
             for i in range(n + 1):
                 z = sub.point(i / n)
                 pts.append((z.real * scale + ox, z.imag * scale + oy))
+            pts = _wobble(pts, seed=len(strokes))
             cum = [0.0]
             for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
                 cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
@@ -168,6 +169,32 @@ def parse_svg_strokes(svg_text: str, canvas: Tuple[int, int]) -> List[Stroke]:
                 continue
             strokes.append(Stroke(points=pts, cum_len=cum, color=color, width=width))
     return strokes
+
+
+def _wobble(pts: List[Point], seed: int, amp: float = 1.6, wavelength: float = 70.0) -> List[Point]:
+    """Displace points perpendicular to the path with smooth noise for a
+    hand-drawn look. Deterministic per stroke so repeated runs match."""
+    if len(pts) < 3:
+        return pts
+    phase = (seed * 2.399963) % (2 * math.pi)  # golden-angle spread per stroke
+    out: List[Point] = [pts[0]]
+    dist = 0.0
+    for i in range(1, len(pts) - 1):
+        x0, y0 = pts[i - 1]
+        x1, y1 = pts[i]
+        seg = math.hypot(x1 - x0, y1 - y0)
+        dist += seg
+        dx, dy = pts[i + 1][0] - x0, pts[i + 1][1] - y0
+        L = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / L, dx / L
+        # two sine octaves = organic wobble, fades at the ends of the stroke
+        w = (math.sin(dist * 2 * math.pi / wavelength + phase)
+             + 0.5 * math.sin(dist * 2 * math.pi / (wavelength * 0.37) + phase * 1.7))
+        fade = min(1.0, i / 4, (len(pts) - 1 - i) / 4)
+        off = amp * w * fade
+        out.append((x1 + nx * off, y1 + ny * off))
+    out.append(pts[-1])
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +210,7 @@ def _draw_stroke_upto(draw: ImageDraw.ImageDraw, stroke: Stroke, upto: float) ->
         return None
     if upto >= stroke.length:
         segment = pts
+        seg_cum = cum
         tip = pts[-1]
     else:
         # find last fully-covered point, then interpolate the partial segment
@@ -195,10 +223,18 @@ def _draw_stroke_upto(draw: ImageDraw.ImageDraw, stroke: Stroke, upto: float) ->
         x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t
         y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t
         segment = pts[: i + 1] + [(x, y)]
+        seg_cum = cum[: i + 1] + [upto]
         tip = (x, y)
     if len(segment) >= 2:
-        draw.line(segment, fill=stroke.color, width=stroke.width, joint="curve")
-        r = stroke.width / 2
+        # draw in short chunks with a subtly varying width — marker pressure feel
+        base_w = stroke.width
+        step = 6
+        for j in range(0, len(segment) - 1, step):
+            chunk = segment[j : j + step + 1]
+            mid = seg_cum[min(j + step // 2, len(seg_cum) - 1)]
+            wv = base_w + round(0.9 * math.sin(mid / 34.0 + base_w))
+            draw.line(chunk, fill=stroke.color, width=max(2, wv), joint="curve")
+        r = base_w / 2
         for px, py in (segment[0], segment[-1]):
             draw.ellipse([px - r, py - r, px + r, py + r], fill=stroke.color)
     return tip
@@ -220,12 +256,22 @@ class SceneAnimator:
         duration: float,
         frames_dir: Path,
         start_index: int,
+        label: Optional[str] = None,
         draw_fraction: float = 0.82,
     ) -> int:
         """Render one scene's frames. Returns the next free frame index."""
         strokes = parse_svg_strokes(svg_text, self.canvas)
         total_len = sum(s.length for s in strokes)
         total_frames = max(1, round(duration * self.fps))
+
+        label_layer = label_bbox = None
+        label_frames = 0
+        if label:
+            from .textcard import make_label_layer
+
+            draw_fraction = min(draw_fraction, 0.70)
+            label_layer, label_bbox = make_label_layer(label, self.canvas)
+            label_frames = max(1, round(total_frames * 0.16))
         draw_frames = max(1, min(total_frames, round(total_frames * draw_fraction)))
 
         # Static base image rebuilt incrementally: completed strokes are baked in
@@ -257,6 +303,26 @@ class SceneAnimator:
                 tip = _draw_stroke_upto(d, strokes[baked], remaining)
 
             drawing_done = revealed >= total_len or baked >= len(strokes)
+
+            # caption wipes in right after the drawing completes
+            if label_layer is not None and f >= draw_frames:
+                lf = f - draw_frames
+                x0, x1 = label_bbox[0], label_bbox[2]
+                mid_y = (label_bbox[1] + label_bbox[3]) // 2
+                if lf < label_frames:
+                    reveal_x = x0 + int((x1 - x0) * (lf + 1) / label_frames)
+                    mask = Image.new("L", self.canvas, 0)
+                    ImageDraw.Draw(mask).rectangle(
+                        [0, 0, reveal_x, self.canvas[1]], fill=255
+                    )
+                    partial = Image.new("RGBA", self.canvas, (0, 0, 0, 0))
+                    partial.paste(label_layer, (0, 0), mask)
+                    frame.paste(partial, (0, 0), partial)
+                    self.paste_hand(frame, (reveal_x, mid_y))
+                    tip = None  # hand already placed at the caption
+                else:
+                    frame.paste(label_layer, (0, 0), label_layer)
+
             if tip is not None and not drawing_done:
                 self.paste_hand(frame, tip)
 

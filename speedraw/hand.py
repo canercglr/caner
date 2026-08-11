@@ -2,49 +2,103 @@
 
 The pen tip sits at pixel (6, 6) of the returned RGBA image, so pasting the
 image at (x - 6, y - 6) puts the tip exactly on the current drawing point.
+
+A stylized cartoon hand grips a marker that points up-left at 45 degrees; the
+forearm leaves toward the bottom-right. Drawn at 2x and downsampled for smooth
+anti-aliased edges. Coordinates use a pen-local frame: ``p(t, s)`` is ``t`` px
+from the tip along the barrel and ``s`` px sideways (positive = up-right).
 """
 
 from __future__ import annotations
 
+import math
 from functools import lru_cache
+from typing import Tuple
 
 from PIL import Image, ImageDraw
 
-SKIN = (232, 190, 156, 255)
-SKIN_SHADOW = (206, 160, 125, 255)
-OUTLINE = (120, 85, 60, 255)
-MARKER_BODY = (40, 40, 45, 255)
-MARKER_CAP = (90, 90, 100, 255)
-SLEEVE = (70, 110, 170, 255)
+SKIN = (240, 200, 168, 255)
+SKIN_DEEP = (221, 175, 138, 255)
+OUTLINE = (110, 76, 52, 255)
+MARKER_DARK = (45, 47, 55, 255)
+MARKER_MID = (80, 84, 96, 255)
+MARKER_TIP = (22, 22, 26, 255)
+SLEEVE = (56, 94, 150, 255)
+SLEEVE_DARK = (41, 71, 116, 255)
+
+Pt = Tuple[float, float]
+
+_COS45 = math.cos(math.radians(45))
+
+
+def _p(t: float, s: float) -> Pt:
+    """Pen-local frame -> image px. t: along barrel from tip, s: sideways."""
+    return (6 + _COS45 * (t + s), 6 + _COS45 * (t - s))
+
+
+def _capsule(d: ImageDraw.ImageDraw, a: Pt, b: Pt, r: float, fill,
+             outline=None, ow: float = 0) -> None:
+    def solid(radius, color):
+        ax, ay = a
+        bx, by = b
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / L * radius, dx / L * radius
+        d.polygon([(ax + nx, ay + ny), (bx + nx, by + ny),
+                   (bx - nx, by - ny), (ax - nx, ay - ny)], fill=color)
+        d.ellipse([ax - radius, ay - radius, ax + radius, ay + radius], fill=color)
+        d.ellipse([bx - radius, by - radius, bx + radius, by + radius], fill=color)
+
+    if outline and ow:
+        solid(r + ow, outline)
+    solid(r, fill)
 
 
 @lru_cache(maxsize=4)
 def get_hand_image(scale: float = 1.0) -> Image.Image:
-    w, h = 260, 300
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    S = 2  # supersampling
+    w, h = 310, 330
+    img = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # Marker running from the tip (6,6) down-right at ~40 degrees.
-    d.polygon([(6, 6), (26, 14), (18, 32)], fill=MARKER_BODY)          # nib
-    d.polygon([(20, 16), (96, 78), (76, 104), (10, 40)], fill=MARKER_BODY)  # barrel
-    d.polygon([(96, 78), (120, 100), (100, 126), (76, 104)], fill=MARKER_CAP)  # butt
+    def sp(pt: Pt) -> Pt:
+        return (pt[0] * S, pt[1] * S)
 
-    # Fist gripping the marker.
-    d.ellipse([52, 62, 172, 176], fill=SKIN, outline=OUTLINE, width=3)
-    # Fingers wrapped over the barrel.
-    for i in range(4):
-        x0 = 48 + i * 24
-        y0 = 58 + i * 16
-        d.rounded_rectangle([x0, y0, x0 + 34, y0 + 26], radius=12,
-                            fill=SKIN, outline=OUTLINE, width=2)
-    # Thumb.
-    d.ellipse([44, 96, 96, 140], fill=SKIN_SHADOW, outline=OUTLINE, width=2)
+    def cap(t0, s0, t1, s1, r, fill, ow=3):
+        _capsule(d, sp(_p(t0, s0)), sp(_p(t1, s1)), r * S, fill, OUTLINE, ow * S)
 
-    # Wrist / sleeve trailing to bottom-right.
-    d.polygon([(120, 150), (196, 128), (256, 208), (196, 288), (108, 200)], fill=SKIN)
-    d.polygon([(176, 168), (256, 130), (260, 300), (150, 300)], fill=SLEEVE)
+    # ---- forearm / sleeve toward bottom-right ------------------------------
+    elbow = (272 * S, 300 * S)
+    wrist = sp(_p(158, 12))
+    _capsule(d, wrist, elbow, 46 * S, SLEEVE, OUTLINE, 3 * S)
 
-    if scale != 1.0:
-        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))),
-                         Image.LANCZOS)
+    # ---- palm mass (behind fingers, connects grip to wrist) ----------------
+    cap(100, 38, 168, 20, 34, SKIN)
+
+    # ---- marker ------------------------------------------------------------
+    cap(30, 0, 148, 0, 12, MARKER_DARK, ow=2)                    # barrel
+    cap(148, 0, 170, 0, 9, MARKER_MID, ow=2)                     # end cap
+    d.polygon([sp((6, 6)), sp(_p(32, 12)), sp(_p(32, -12))], fill=MARKER_TIP)  # nib
+    _capsule(d, sp(_p(45, 5)), sp(_p(135, 5)), 2.2 * S, (255, 255, 255, 70))  # sheen
+
+    # ---- four fingers wrapping across the barrel ---------------------------
+    for i, t in enumerate((92, 112, 132, 152)):
+        taper = (13, 12.5, 12, 11)[i]
+        cap(t, 34, t - 6, -22, taper, SKIN)
+        # fingertip nail-side shading
+        tip = sp(_p(t - 6, -22))
+        rr = 6 * S
+        d.ellipse([tip[0] - rr, tip[1] - rr, tip[0] + rr, tip[1] + rr], fill=SKIN_DEEP)
+
+    # ---- thumb pressing along the near side toward the nib -----------------
+    cap(128, 30, 70, 16, 13, SKIN_DEEP)
+
+    img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
     return img
+
+
+if __name__ == "__main__":
+    im = get_hand_image()
+    bg = Image.new("RGB", im.size, (250, 250, 248))
+    bg.paste(im, (0, 0), im)
+    bg.save("/tmp/hand_preview.png")

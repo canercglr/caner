@@ -28,8 +28,8 @@ def run_pipeline(
     *,
     num_scenes: int = 4,
     model: str = DEFAULT_MODEL,
-    tts_engine: str = "espeak",
-    voice: str = "en-US",
+    tts_engine: str = "auto",
+    voice: Optional[str] = None,
     canvas: Tuple[int, int] = (1280, 720),
     fps: int = 30,
     demo: bool = False,
@@ -91,7 +91,9 @@ def run_pipeline(
             log(f"animating scene {i}/{len(script.scenes)} "
                 f"({duration:.1f}s): {scene.label}")
             start = frame_idx
-            frame_idx = animator.render_scene(svg, duration, frames_dir, frame_idx)
+            frame_idx = animator.render_scene(
+                svg, duration, frames_dir, frame_idx, label=scene.label
+            )
             # pad/trim audio to the exact rendered frame span
             rendered = (frame_idx - start) / fps
             (workdir / f"svg_{i:02d}.svg").write_text(svg, encoding="utf-8")

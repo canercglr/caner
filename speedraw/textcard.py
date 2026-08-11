@@ -67,6 +67,21 @@ def _fit_title(title: str, canvas: Tuple[int, int]) -> Image.Image:
     return layer
 
 
+def make_label_layer(text: str, canvas: Tuple[int, int]) -> Tuple[Image.Image, Tuple[int, int, int, int]]:
+    """Small caption layer centered near the bottom of the canvas."""
+    cw, ch = canvas
+    size = max(20, ch // 16)
+    font = _load_font(size)
+    layer = Image.new("RGBA", canvas, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    tw = d.textlength(text, font=font)
+    x = (cw - tw) // 2
+    y = int(ch * 0.90) - size
+    d.text((x, y), text, font=font, fill=(35, 55, 105, 255))
+    bbox = layer.getbbox() or (0, 0, cw, ch)
+    return layer, bbox
+
+
 def render_title_frames(
     title: str,
     duration: float,

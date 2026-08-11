@@ -10,8 +10,8 @@ fully automated:
    per scene) using structured outputs.
 2. **Visuals** — Claude generates simple line-art SVGs for each scene; the
    renderer traces every stroke progressively with a drawing hand overlay.
-3. **Voiceover** — narration is synthesized offline with espeak-ng (or a silent
-   track with `--tts none`).
+3. **Voiceover** — narration is synthesized with Microsoft Edge neural voices
+   (edge-tts) by default, falling back to offline espeak-ng or a silent track.
 4. **Assembly** — ffmpeg muxes the frames and audio into a single H.264 MP4,
    complete with an animated hand-written title card.
 
@@ -19,8 +19,9 @@ fully automated:
 
 - Python 3.10+
 - [ffmpeg](https://ffmpeg.org/) on your `PATH`
-- [espeak-ng](https://github.com/espeak-ng/espeak-ng) for voiceovers
-  (optional — use `--tts none` without it)
+- [edge-tts](https://pypi.org/project/edge-tts/) for natural neural voiceovers
+  (installed via requirements; needs network) and/or
+  [espeak-ng](https://github.com/espeak-ng/espeak-ng) as the offline fallback
 - An Anthropic API key for AI generation (not needed for `--demo`)
 
 ```bash
@@ -35,8 +36,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # Full AI pipeline: topic -> script -> drawings -> voiceover -> video
 python -m speedraw "How does photosynthesis work?" -o photosynthesis.mp4
 
-# More scenes, different voice, 1080p
-python -m speedraw "What is compound interest?" --scenes 6 --voice en-GB --size 1920x1080
+# More scenes, Turkish neural voice, 1080p
+python -m speedraw "Bileşik faiz nedir?" --scenes 6 --voice tr --size 1920x1080
+
+# Pick a specific Edge neural voice (see `edge-tts --list-voices`)
+python -m speedraw "What is compound interest?" --voice en-GB-RyanNeural
 
 # Try the pipeline offline with bundled demo content (no API key required)
 python -m speedraw --demo -o demo.mp4
@@ -49,8 +53,8 @@ python -m speedraw --demo -o demo.mp4
 | `-o, --output` | `explainer.mp4` | Output MP4 path |
 | `--scenes N` | `4` | Number of scenes (1–12) |
 | `--model` | `claude-opus-5` | Claude model used for script + visuals |
-| `--tts {espeak,none}` | `espeak` | Voiceover engine (`none` = silent track) |
-| `--voice` | `en-US` | espeak-ng voice |
+| `--tts {auto,edge,espeak,none}` | `auto` | Voiceover engine: `edge` = neural voices, `espeak` = offline, `none` = silent; `auto` tries edge then falls back |
+| `--voice` | English | Language code (`en`, `tr`, `de`, ...) or a full Edge voice name (`en-US-AriaNeural`) |
 | `--size WxH` | `1280x720` | Video resolution |
 | `--fps` | `30` | Frame rate |
 | `--no-title` | off | Skip the animated title card |
@@ -70,7 +74,7 @@ topic ──► script_gen.py ──► VideoScript {title, scenes[{label, narra
                            frame-by-frame at a speed that fills the narration,
                            and overlays a procedurally drawn hand at the pen tip
                 │
-           voiceover.py ─► espeak-ng WAV per scene (padded to frame-exact length)
+           voiceover.py ─► edge-tts / espeak-ng WAV per scene (frame-exact length)
                 │
                 ▼
           assembler.py ──► ffmpeg: PNG sequence + concatenated audio ─► final MP4
@@ -78,6 +82,11 @@ topic ──► script_gen.py ──► VideoScript {title, scenes[{label, narra
 
 Design notes:
 
+- **Hand-drawn feel.** Every stroke gets subtle perpendicular wobble (two sine
+  octaves, deterministic per stroke) and a slowly varying marker width, so even
+  geometric SVG shapes look drawn by a person.
+- **Scene captions.** After each drawing completes, the scene label is
+  hand-written beneath it with the same wipe effect as the title card.
 - **Drawing order matters.** The SVG prompt asks Claude to emit elements in the
   order a person would naturally draw them, so the reveal feels intentional.
 - **Sync is frame-exact.** Each scene's audio is padded/trimmed to the exact

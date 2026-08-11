@@ -14,13 +14,21 @@ Hard requirements:
 - viewBox="0 0 1280 720".
 - Use ONLY these elements: <path>, <line>, <circle>, <ellipse>, <rect>,
   <polyline>. No <text>, <g>, <defs>, gradients, images, or transforms.
-- Every element: fill="none", stroke (default "#111"), stroke-width 4-8.
-  You may use at most one accent color (e.g. "#c0392b" or "#1a6fb0") sparingly.
-- Keep it SIMPLE: roughly 5-25 strokes total. Big, bold, cartoon-like shapes.
-  Slightly imperfect, hand-drawn-looking curves are ideal.
-- Order the elements in the order a person would naturally draw them
-  (main subject first, then details, then arrows).
-- Leave margins: keep the drawing inside x=[80,1200], y=[60,640].
+- Every element: fill="none", stroke, stroke-width 4-8. Palette: near-black
+  "#222" for main outlines plus 2-3 supporting colors from
+  {"#c0392b", "#1a6fb0", "#278243", "#d37c1b", "#6c3c9e"} used meaningfully
+  (sun = orange, water = blue, plant = green, ...).
+- Aim for 15-40 strokes: one LARGE central subject drawn with confident cartoon
+  outlines, 2-4 supporting elements, and arrows/motion lines where helpful.
+  Detail belongs in expressive silhouettes, not in tiny features.
+- Prefer organic, slightly wavy cubic curves ("C") over ruler-straight lines
+  and perfect symmetry — it should feel drawn by a person, not a plotter.
+  Faces, stick figures, and simple icons are welcome and read very well.
+- Order the elements in the order a person would naturally draw them:
+  main subject outline -> its details -> supporting elements -> arrows last.
+- Compose deliberately: main subject roughly centered or on one side with
+  supporting elements balancing it. Keep everything inside x=[80,1200],
+  y=[60,600] (the bottom strip is reserved for a caption).
 """
 
 
