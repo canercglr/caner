@@ -310,7 +310,7 @@ def _set_group_pivot(anim: AnimSpec, group: List[Stroke], seed: int) -> None:
     anim.phase = (seed * 1.7) % (2 * math.pi)
 
 
-def _wobble(pts: List[Point], seed: int, amp: float = 1.6, wavelength: float = 70.0) -> List[Point]:
+def _wobble(pts: List[Point], seed: int, amp: float = 1.15, wavelength: float = 95.0) -> List[Point]:
     """Displace points perpendicular to the path with smooth noise for a
     hand-drawn look. Deterministic per stroke so repeated runs match."""
     if len(pts) < 3:
@@ -524,7 +524,7 @@ class SceneAnimator:
         frames_dir: Path,
         start_index: int,
         label: Optional[str] = None,
-        draw_fraction: float = 0.82,
+        draw_fraction: float = 0.60,
     ) -> int:
         """Render one scene's frames. Returns the next free frame index."""
         strokes = parse_svg_strokes(svg_text, self.canvas)
@@ -540,9 +540,9 @@ class SceneAnimator:
         if label:
             from .textcard import make_label_layer
 
-            draw_fraction = min(draw_fraction, 0.62)
+            draw_fraction = min(draw_fraction, 0.52)
             label_layer, label_bbox = make_label_layer(label, self.canvas)
-            label_frames = max(1, round(total_frames * 0.14))
+            label_frames = max(1, round(total_frames * 0.12))
         draw_frames = max(1, min(total_frames, round(total_frames * draw_fraction)))
         anim_seconds = max(1e-6, (total_frames - draw_frames) / self.fps)
 

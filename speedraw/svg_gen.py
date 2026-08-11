@@ -19,15 +19,24 @@ Hard requirements:
   "#222" for main outlines plus 2-4 supporting colors from
   {"#c0392b", "#1a6fb0", "#278243", "#d37c1b", "#6c3c9e", "#7a4a22", "#6e6e6e"}
   used meaningfully (sun = orange, water = blue, plant = green, wood = brown).
-- Draw a RICH, complete illustration: aim for 40-100 strokes. Build it in
+- Draw a RICH, ELEGANT illustration: aim for 60-130 strokes. Build it in
   layers like an illustrator would:
   1. One large, detailed main subject with interior detail (features, veins,
      panels, windows, spokes — whatever fits the subject).
   2. 3-6 supporting elements that set the scene (ground line, clouds, tools,
-     small figures, secondary objects).
+     small figures, secondary objects, foreground dressing like grass or
+     small props that add depth).
   3. Shading: groups of 3-6 short parallel hatch lines (thin, width 3) on the
-     shadow side of major shapes — this makes drawings look finished.
+     shadow side of major shapes, plus a few short horizontal contact-shadow
+     dashes under grounded objects — this makes drawings look finished.
   4. Arrows, motion lines, sparkles, or labels-as-icons last.
+- Elegance comes from deliberate line-weight hierarchy and restraint:
+  thick (7-8) confident outer contours, medium (5) secondary shapes, thin
+  (3-4) interior detail and shading. Echo a large outline with a thin inner
+  ring or double line where it adds sophistication. Give every grounded
+  object a visual anchor (shadow, mound, or overlap with the ground line) so
+  nothing floats. Prefer a few well-placed details over uniform clutter, and
+  keep generous empty space around the composition's focal point.
 - Pack several pen-lifts into one <path> using multiple "M" subpaths (great
   for hatching, rain, rays); the renderer lifts the pen between them.
 - Prefer organic, slightly wavy cubic curves ("C") over ruler-straight lines

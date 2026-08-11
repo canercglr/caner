@@ -95,7 +95,11 @@ Design notes:
   octaves, deterministic per stroke) and a slowly varying marker width, so even
   geometric SVG shapes look drawn by a person.
 - **Scene captions.** After each drawing completes, the scene label is
-  hand-written beneath it with the same wipe effect as the title card.
+  hand-written beneath it with the same wipe effect as the title card —
+  serif italic with accent dashes, under a serif title card with a swash
+  underline.
+- **Snappy pacing.** Drawing fills only ~50-60% of each scene, at true
+  speed-drawing tempo; the rest of the time belongs to motion and captions.
 - **Drawing order matters.** The SVG prompt asks Claude to emit elements in the
   order a person would naturally draw them, so the reveal feels intentional.
 - **Sync is frame-exact.** Each scene's audio is padded/trimmed to the exact
