@@ -39,6 +39,29 @@ Hard requirements:
 - Compose deliberately: main subject roughly centered or on one side with
   supporting elements balancing it. Keep everything inside x=[80,1200],
   y=[60,600] (the bottom strip is reserved for a caption).
+
+Motion (optional but encouraged, 2-6 moving things): after the drawing is
+complete, elements tagged with a data-anim attribute come alive:
+  data-anim="float[:amp]"        gentle bobbing (bubbles, clouds, boats)
+  data-anim="drift:dx,dy"        slow continuous glide in px/s (clouds, birds)
+  data-anim="drift:dx,dy,wrap"   looping motion that resets after `wrap` px
+                                 (falling rain, rising bubbles, smoke)
+  data-anim="spin[:period_s]"    slow rotation about its center (sun rays,
+                                 gears, wheels, orbiting moons)
+  data-anim="sway[:deg]"         pendulum sway about its base (plants, trees,
+                                 flames, antennas)
+  data-anim="pulse[:amp]"        gentle scale beat (sun, hearts, sparkles,
+                                 highlights)
+Notes: spin/sway/pulse rotate or scale the WHOLE element about one pivot, so
+put everything that should move together into ONE <path> using multiple "M"
+subpaths. drift/float are pure translations, so separate elements with the
+same parameters move in perfect sync. Animate meaningful things: rain falls,
+smoke rises, wheels spin — don't animate ground lines or arrows.
+
+You may also add a walking stick figure (drawn standing, then it walks):
+  <walker x="200" y="560" to-x="900" scale="1" stroke="#222"/>
+where x/to-x are the start/end positions and y is the ground level of its
+feet. Use it when a person walking, arriving, or leaving fits the story.
 """
 
 

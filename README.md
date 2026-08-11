@@ -8,8 +8,10 @@ fully automated:
 
 1. **Script** — Claude writes a scene-by-scene script (narration + a visual spec
    per scene) using structured outputs.
-2. **Visuals** — Claude generates simple line-art SVGs for each scene; the
+2. **Visuals** — Claude generates rich line-art SVGs for each scene; the
    renderer traces every stroke progressively with a drawing hand overlay.
+   Once a drawing is finished it comes alive: clouds drift, rain falls,
+   sun rays spin, plants sway, and stick figures walk across the scene.
 3. **Voiceover** — narration is synthesized with Microsoft Edge neural voices
    (edge-tts) by default, falling back to offline espeak-ng or a silent track.
 4. **Assembly** — ffmpeg muxes the frames and audio into a single H.264 MP4,
@@ -82,6 +84,13 @@ topic ──► script_gen.py ──► VideoScript {title, scenes[{label, narra
 
 Design notes:
 
+- **Motion system.** Any SVG element can carry a `data-anim` attribute —
+  `float`, `drift:dx,dy[,wrap]`, `spin[:period]`, `sway[:deg]`, `pulse[:amp]` —
+  and starts moving the moment the scene's drawing completes. A custom
+  `<walker x y to-x scale stroke/>` element adds a procedural stick figure
+  that is drawn standing, then walks with swinging arms and bending knees.
+  Claude is prompted to tag meaningful motion (rain falls, smoke rises,
+  wheels spin) in the SVGs it generates.
 - **Hand-drawn feel.** Every stroke gets subtle perpendicular wobble (two sine
   octaves, deterministic per stroke) and a slowly varying marker width, so even
   geometric SVG shapes look drawn by a person.
