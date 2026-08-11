@@ -104,6 +104,10 @@ def _parse_anim(value: Optional[str]) -> Optional[AnimSpec]:
         return AnimSpec("sway", (nums[0] if nums else 4.0,))
     if kind == "pulse":
         return AnimSpec("pulse", (nums[0] if nums else 0.06,))
+    if kind == "bounce":
+        h = nums[0] if nums else 40.0
+        p = nums[1] if len(nums) > 1 else 0.9
+        return AnimSpec("bounce", (h, p))
     return None
 
 
@@ -140,6 +144,10 @@ def _anim_offset(anim: AnimSpec, t: float):
         amp = anim.params[0]
         s = 1.0 + amp * math.sin(2 * math.pi * t / 2.2 + anim.phase)
         return lambda x, y: (px + (x - px) * s, py + (y - py) * s)
+    if k == "bounce":
+        h, p = anim.params
+        dy = -h * abs(math.sin(math.pi * t / max(0.2, p)))
+        return lambda x, y: (x, y + dy)
     return lambda x, y: (x, y)
 
 

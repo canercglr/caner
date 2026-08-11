@@ -33,6 +33,10 @@ def main(argv=None) -> int:
                         help="the topic to explain, e.g. 'How does a bicycle stay upright?'")
     parser.add_argument("-o", "--output", type=Path, default=Path("explainer.mp4"),
                         help="output MP4 path (default: explainer.mp4)")
+    parser.add_argument("--story", action="store_true",
+                        help="story mode: an animated stick-figure story with "
+                             "walking, emotions, gestures and spoken dialogue "
+                             "instead of a speed-drawing explainer")
     parser.add_argument("--scenes", type=int, default=4,
                         help="number of scenes to generate (default: 4)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -66,20 +70,37 @@ def main(argv=None) -> int:
         parser.error("--scenes must be between 1 and 12")
 
     try:
-        run_pipeline(
-            args.topic or "demo",
-            args.output,
-            num_scenes=args.scenes,
-            model=args.model,
-            tts_engine=args.tts,
-            voice=args.voice,
-            canvas=args.size,
-            fps=args.fps,
-            demo=args.demo,
-            title_card=not args.no_title,
-            workdir=args.workdir,
-            keep_workdir=args.keep_workdir,
-        )
+        if args.story:
+            from .story_pipeline import run_story_pipeline
+
+            run_story_pipeline(
+                args.topic or "demo",
+                args.output,
+                model=args.model,
+                tts_engine=args.tts,
+                voice=args.voice,
+                canvas=args.size,
+                fps=args.fps,
+                demo=args.demo,
+                title_card=not args.no_title,
+                workdir=args.workdir,
+                keep_workdir=args.keep_workdir,
+            )
+        else:
+            run_pipeline(
+                args.topic or "demo",
+                args.output,
+                num_scenes=args.scenes,
+                model=args.model,
+                tts_engine=args.tts,
+                voice=args.voice,
+                canvas=args.size,
+                fps=args.fps,
+                demo=args.demo,
+                title_card=not args.no_title,
+                workdir=args.workdir,
+                keep_workdir=args.keep_workdir,
+            )
     except Exception as exc:  # surface a clean error instead of a traceback
         print(f"error: {exc}", file=sys.stderr)
         return 1

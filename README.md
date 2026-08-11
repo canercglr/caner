@@ -46,7 +46,33 @@ python -m speedraw "What is compound interest?" --voice en-GB-RyanNeural
 
 # Try the pipeline offline with bundled demo content (no API key required)
 python -m speedraw --demo -o demo.mp4
+
+# STORY MODE: an animated stick-figure story instead of an explainer —
+# characters walk, emote, gesture and speak with per-character voices
+python -m speedraw --story "A stick figure who is afraid of heights climbs a mountain"
+python -m speedraw --story --demo -o story.mp4   # offline demo story
 ```
+
+## Story mode
+
+`--story` switches from speed-drawing explainers to fully animated
+stick-figure stories. Claude writes a screenplay as structured data — actors,
+shots, scene props, and a sequential event timeline — and the renderer plays
+it out:
+
+- **Actors** walk between positions (with a proper walk cycle), enter and
+  exit off-screen, and always subtly bob and blink.
+- **Emotions** (happy, sad, angry, surprised, scared, excited, love) change
+  the face, the posture *and* a floating badge above the head — a `!`, a
+  heart, anger marks, a sweat drop, or sparkles.
+- **Gestures**: wave, jump, point, dance.
+- **Dialogue** is spoken with a distinct neural voice per character
+  (male/female, language follows `--voice`), an animated talking mouth, and
+  a hand-drawn speech bubble that pops in above the speaker.
+- **The world moves too**: the same prop library used by explainer mode
+  (sun, clouds, trees, houses, cars with spinning wheels, balloons,
+  kites, rain, birds...) with motions — a balloon can drift away mid-story,
+  rain can fall, a ball can bounce.
 
 ### Options
 
