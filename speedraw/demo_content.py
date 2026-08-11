@@ -1,8 +1,277 @@
-"""Canned script + drawings for offline testing (no API key required)."""
+"""Canned script + drawings for offline testing (no API key required).
+
+The demo illustrations are built procedurally so they can be genuinely
+detailed (hatching, serrated leaves, bumpy clouds, wavy rays) while staying
+readable in source form. Element order == drawing order on screen.
+"""
 
 from __future__ import annotations
 
+import math
+from typing import List
+
 from .script_gen import Scene, VideoScript
+
+INK = "#222"
+SUN = "#d37c1b"
+GREEN = "#278243"
+BLUE = "#1a6fb0"
+RED = "#c0392b"
+GRAY = "#6e6e6e"
+BROWN = "#7a4a22"
+
+
+def _el(d: str, stroke: str = INK, width: int = 6) -> str:
+    return f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{width}"/>'
+
+
+def _wavy_circle(cx: float, cy: float, r: float, bumps: int = 12, amp: float = 4) -> str:
+    """Closed, slightly lumpy circle as a polyline path."""
+    pts = []
+    for i in range(bumps * 6 + 1):
+        a = 2 * math.pi * i / (bumps * 6)
+        rr = r + amp * math.sin(a * bumps + cx * 0.13)
+        pts.append(f"{cx + rr * math.cos(a):.0f},{cy + rr * math.sin(a):.0f}")
+    return "M " + " L ".join(pts) + " Z"
+
+
+def _hatch(x: float, y: float, w: float, h: float, n: int, slant: float = 0.55) -> str:
+    """n parallel shading strokes inside a box; one path, pen lifts between."""
+    parts = []
+    for i in range(n):
+        t = (i + 0.5) / n
+        x0 = x + t * w
+        parts.append(f"M {x0:.0f},{y:.0f} L {x0 - h * slant:.0f},{y + h:.0f}")
+    return " ".join(parts)
+
+
+def _cloud(cx: float, cy: float, s: float = 1.0) -> str:
+    """Puffy cloud outline made of arcs."""
+    b = [(-95, 12, 34), (-45, -26, 40), (18, -34, 42), (72, -8, 34), (96, 22, 26)]
+    pts = []
+    for i in range(121):
+        a = math.pi * 2 * i / 120
+        best = 0.0
+        for bx, by, br in b:
+            d = br + 6 - math.hypot(math.cos(a) * 110 - bx, math.sin(a) * 55 - by) * 0.55
+            best = max(best, d)
+        rr = 58 + best * 0.9 + 3 * math.sin(a * 9)
+        pts.append(f"{cx + s * rr * math.cos(a) * 1.55:.0f},{cy + s * rr * math.sin(a) * 0.8:.0f}")
+    return "M " + " L ".join(pts) + " Z"
+
+
+def _rays(cx: float, cy: float, r0: float, r1: float, n: int, color: str,
+          width: int = 5, phase: float = 0.0) -> List[str]:
+    out = []
+    for i in range(n):
+        a = 2 * math.pi * i / n + phase
+        x0, y0 = cx + r0 * math.cos(a), cy + r0 * math.sin(a)
+        x1, y1 = cx + r1 * math.cos(a), cy + r1 * math.sin(a)
+        mx = (x0 + x1) / 2 + 9 * math.cos(a + math.pi / 2)
+        my = (y0 + y1) / 2 + 9 * math.sin(a + math.pi / 2)
+        out.append(_el(f"M {x0:.0f},{y0:.0f} Q {mx:.0f},{my:.0f} {x1:.0f},{y1:.0f}",
+                       color, width))
+    return out
+
+
+def _arrow(x0, y0, x1, y1, color, width=7, bend=30) -> List[str]:
+    dx, dy = x1 - x0, y1 - y0
+    L = math.hypot(dx, dy) or 1
+    nx, ny = -dy / L, dx / L
+    mx, my = (x0 + x1) / 2 + nx * bend, (y0 + y1) / 2 + ny * bend
+    ux, uy = (x1 - mx) / max(1, math.hypot(x1 - mx, y1 - my)), (y1 - my) / max(1, math.hypot(x1 - mx, y1 - my))
+    h = 26
+    h1 = (x1 - ux * h + nx * h * 0.6, y1 - uy * h + ny * h * 0.6)
+    h2 = (x1 - ux * h - nx * h * 0.6, y1 - uy * h - ny * h * 0.6)
+    return [
+        _el(f"M {x0:.0f},{y0:.0f} Q {mx:.0f},{my:.0f} {x1:.0f},{y1:.0f}", color, width),
+        _el(f"M {x1:.0f},{y1:.0f} L {h1[0]:.0f},{h1[1]:.0f} M {x1:.0f},{y1:.0f} L {h2[0]:.0f},{h2[1]:.0f}",
+            color, width),
+    ]
+
+
+def _bird(cx, cy, s=1.0) -> str:
+    return _el(f"M {cx - 22 * s:.0f},{cy:.0f} Q {cx - 10 * s:.0f},{cy - 14 * s:.0f} {cx:.0f},{cy:.0f} "
+               f"Q {cx + 10 * s:.0f},{cy - 14 * s:.0f} {cx + 22 * s:.0f},{cy:.0f}", INK, 4)
+
+
+def _grass(cx, cy) -> str:
+    return _el(f"M {cx - 14:.0f},{cy:.0f} L {cx - 8:.0f},{cy - 18:.0f} "
+               f"M {cx - 2:.0f},{cy:.0f} L {cx:.0f},{cy - 24:.0f} "
+               f"M {cx + 10:.0f},{cy:.0f} L {cx + 14:.0f},{cy - 16:.0f}", GREEN, 4)
+
+
+def _sparkle(cx, cy, r=14, color=SUN) -> str:
+    return _el(f"M {cx - r},{cy} L {cx + r},{cy} M {cx},{cy - r} L {cx},{cy + r}", color, 4)
+
+
+def _serrated_leaf(cx: float, cy: float, length: float, width: float,
+                   tilt_deg: float = 0.0) -> str:
+    """Serrated leaf outline: base at the bottom, tip at the top."""
+    a = math.radians(tilt_deg)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def T(x, y):
+        return (cx + x * ca - y * sa, cy + x * sa + y * ca)
+
+    pts = []
+    n = 46
+    for side in (1, -1):
+        rng = range(n + 1) if side == 1 else range(n, -1, -1)
+        for i in rng:
+            t = i / n
+            y = length / 2 - t * length
+            base_w = width * math.sin(math.pi * min(1, t * 1.06)) ** 0.8
+            serr = 10 * (1 if i % 2 else -0.2) * math.sin(math.pi * t) ** 0.5
+            x, yy = T(side * (base_w + serr), y)
+            pts.append(f"{x:.0f},{yy:.0f}")
+    return "M " + " L ".join(pts) + " Z"
+
+
+def _leaf_veins(cx, cy, length, width, tilt_deg=0.0, n=6) -> List[str]:
+    a = math.radians(tilt_deg)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def T(x, y):
+        return (cx + x * ca - y * sa, cy + x * sa + y * ca)
+
+    out = []
+    p0, p1 = T(0, length / 2), T(0, -length / 2)
+    out.append(_el(f"M {p0[0]:.0f},{p0[1]:.0f} L {p1[0]:.0f},{p1[1]:.0f}", GREEN, 5))
+    for i in range(1, n + 1):
+        t = i / (n + 1)
+        y = length / 2 - t * length
+        w = width * math.sin(math.pi * min(1, t * 1.06)) ** 0.8 * 0.82
+        for side in (1, -1):
+            s0, s1, s2 = T(0, y), T(side * w * 0.6, y - w * 0.28), T(side * w, y - w * 0.5)
+            out.append(_el(
+                f"M {s0[0]:.0f},{s0[1]:.0f} Q {s1[0]:.0f},{s1[1]:.0f} {s2[0]:.0f},{s2[1]:.0f}",
+                GREEN, 3))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Scene 1 — landscape: sun, clouds, birds, hills, tree, sprout
+# ---------------------------------------------------------------------------
+
+def _scene1() -> str:
+    e: List[str] = []
+    # sun with face, rays, inner shading
+    e.append(_el(_wavy_circle(240, 185, 85, bumps=10, amp=3.5), SUN, 8))
+    e.append(_el("M 206,163 C 212,155 222,155 228,163", INK, 5))
+    e.append(_el("M 252,163 C 258,155 268,155 274,163", INK, 5))
+    e.append(_el("M 204,205 C 222,228 258,228 276,203", INK, 5))
+    e += _rays(240, 185, 103, 148, 10, SUN, 5, phase=0.31)
+    # clouds with under-shading, birds
+    e.append(_el(_cloud(660, 120, 0.9), GRAY, 6))
+    e.append(_el(_hatch(590, 148, 130, 18, 5), GRAY, 3))
+    e.append(_el(_cloud(1130, 95, 0.55), GRAY, 6))
+    e.append(_el(_hatch(1090, 112, 76, 12, 4), GRAY, 3))
+    e += [_bird(790, 84), _bird(852, 60, 0.8), _bird(908, 100, 0.65)]
+    # hills and ground
+    e.append(_el("M 84,520 C 250,438 420,440 560,502 C 612,525 676,525 728,502 "
+                 "C 872,440 1040,444 1196,512", INK, 7))
+    e.append(_el("M 84,598 C 400,566 900,572 1196,596", INK, 6))
+    e.append(_el(_hatch(150, 540, 180, 40, 6), GRAY, 3))
+    e.append(_el(_hatch(800, 535, 160, 40, 5), GRAY, 3))
+    # tree: trunk, bark, foliage, shading, apples
+    e.append(_el("M 985,592 C 990,540 982,480 1002,438 M 1042,592 C 1036,540 1046,485 1022,440 "
+                 "M 1002,438 C 992,410 980,395 962,382 M 1022,440 C 1036,408 1052,394 1072,380", BROWN, 7))
+    e.append(_el("M 998,560 C 1004,548 1004,536 1000,524 M 1024,555 C 1018,540 1020,528 1026,514", BROWN, 3))
+    e.append(_el(_wavy_circle(1016, 315, 118, bumps=14, amp=9), GREEN, 7))
+    e.append(_el(_hatch(920, 350, 80, 46, 5), GREEN, 3))
+    e += [_el(_wavy_circle(x, y, 13, bumps=6, amp=1.2), RED, 5)
+          for x, y in ((966, 300), (1060, 282), (1022, 360))]
+    # sprout in a soil mound, light beams reaching it
+    e.append(_el("M 380,586 C 402,566 458,566 480,586", BROWN, 6))
+    e.append(_el("M 430,574 C 428,548 430,522 429,500", GREEN, 6))
+    e.append(_el("M 429,530 C 400,526 386,506 380,482 C 408,486 424,502 429,530 Z", GREEN, 6))
+    e.append(_el("M 429,512 C 458,508 472,488 478,464 C 450,468 434,484 429,512 Z", GREEN, 6))
+    e.append(_el(_hatch(396, 578, 70, 14, 4), BROWN, 3))
+    e += _arrow(330, 262, 408, 440, SUN, 5, bend=40)
+    # grass tufts
+    e += [_grass(320, 590), _grass(580, 585), _grass(770, 588), _grass(1140, 590)]
+    return _svg(e)
+
+
+# ---------------------------------------------------------------------------
+# Scene 2 — serrated leaf with veins + sun / CO2 cloud / rain inputs
+# ---------------------------------------------------------------------------
+
+def _scene2() -> str:
+    e: List[str] = []
+    # central leaf with stem and roots
+    e.append(_el(_serrated_leaf(645, 360, 360, 165), GREEN, 7))
+    e += _leaf_veins(645, 360, 360, 165)
+    e.append(_el("M 645,540 C 643,562 645,578 644,592", GREEN, 6))
+    e.append(_el("M 644,592 C 620,596 600,590 585,596 M 644,592 C 668,598 688,592 704,598 "
+                 "M 644,592 C 640,596 636,596 632,599", BROWN, 4))
+    # ground line + soil shading
+    e.append(_el("M 90,588 C 320,578 560,582 700,586 C 880,590 1050,584 1190,588", INK, 5))
+    e.append(_el(_hatch(520, 592, 260, 8, 8), BROWN, 3))
+    # sun + its arrow
+    e.append(_el(_wavy_circle(195, 150, 62, bumps=9, amp=3), SUN, 7))
+    e += _rays(195, 150, 76, 108, 8, SUN, 4, phase=0.2)
+    e += _arrow(285, 225, 520, 300, SUN, 6, bend=36)
+    # CO2 cloud + drifting molecules + arrow
+    e.append(_el(_cloud(1075, 150, 0.78), GRAY, 6))
+    e += [_el(_wavy_circle(x, y, r, bumps=5, amp=1), GRAY, 4)
+          for x, y, r in ((995, 235, 14), (958, 274, 10), (930, 306, 7))]
+    e += _arrow(990, 255, 790, 330, GRAY, 6, bend=-32)
+    # rain cloud + rain + arrow into the roots
+    e.append(_el(_cloud(255, 445, 0.62), BLUE, 6))
+    e.append(_el(" ".join(
+        f"M {x},{y} C {x - 4},{y + 14} {x - 8},{y + 24} {x - 10},{y + 36}"
+        for x, y in ((205, 495), (248, 505), (292, 498), (270, 480))), BLUE, 4))
+    e += _arrow(330, 520, 560, 575, BLUE, 6, bend=24)
+    return _svg(e)
+
+
+# ---------------------------------------------------------------------------
+# Scene 3 — leaf factory: sugar + oxygen + breathing stick figure
+# ---------------------------------------------------------------------------
+
+def _scene3() -> str:
+    e: List[str] = []
+    # leaf tilted like a little factory, with chimney
+    e.append(_el(_serrated_leaf(330, 400, 300, 140, tilt_deg=-14), GREEN, 7))
+    e += _leaf_veins(330, 400, 300, 140, tilt_deg=-14, n=5)
+    e.append(_el("M 350,262 L 360,215 L 402,224 L 396,252", BROWN, 6))
+    # oxygen bubbles rising from the chimney
+    e += [_el(_wavy_circle(x, y, r, bumps=5, amp=1), BLUE, 5)
+          for x, y, r in ((392, 185, 18), (430, 138, 14), (474, 102, 11), (524, 76, 8))]
+    # arrow to the sugar crystal
+    e += _arrow(478, 400, 640, 396, INK, 7, bend=-18)
+    # sugar: hexagon with inner facets and sparkles
+    hexpts = [(760 + 74 * math.cos(math.radians(60 * i - 30)),
+               392 + 74 * math.sin(math.radians(60 * i - 30))) for i in range(6)]
+    e.append(_el("M " + " L ".join(f"{x:.0f},{y:.0f}" for x, y in hexpts) + " Z", RED, 7))
+    e.append(_el(" ".join(f"M 760,392 L {x:.0f},{y:.0f}" for x, y in hexpts[::2]), RED, 4))
+    e += [_sparkle(688, 302, 12), _sparkle(842, 300, 15), _sparkle(852, 470, 11)]
+    # energy bolt above the sugar
+    e.append(_el("M 780,232 L 756,282 L 778,282 L 748,338", SUN, 6))
+    # stick figure breathing the oxygen
+    e.append(_el(_wavy_circle(1040, 235, 46, bumps=8, amp=2), INK, 6))
+    e.append(_el("M 1006,206 C 1014,192 1028,184 1044,182 M 1050,182 C 1062,184 1072,190 1078,200", INK, 4))
+    e.append(_el("M 1022,228 L 1026,232 M 1056,228 L 1060,232", INK, 5))
+    e.append(_el("M 1020,256 C 1030,266 1050,266 1060,256", INK, 5))
+    e.append(_el("M 1040,281 L 1040,430", INK, 7))
+    e.append(_el("M 1040,318 C 1006,300 978,290 948,286 M 1040,318 C 1074,302 1102,294 1130,292", INK, 7))
+    e.append(_el("M 1040,430 C 1022,466 1006,500 992,528 M 1040,430 C 1058,466 1074,500 1088,528", INK, 7))
+    # breath swirls drifting from the bubbles to the face
+    e.append(_el("M 902,180 C 930,170 950,176 964,190 C 950,198 934,196 924,188", BLUE, 4))
+    e.append(_el("M 912,222 C 938,214 956,218 968,230", BLUE, 4))
+    # ground + grass
+    e.append(_el("M 120,565 C 400,552 800,556 1170,562", INK, 5))
+    e += [_grass(240, 560), _grass(700, 558), _grass(1150, 560)]
+    return _svg(e)
+
+
+def _svg(elements: List[str]) -> str:
+    body = "\n  ".join(elements)
+    return ('<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">\n  '
+            f"{body}\n</svg>")
+
 
 DEMO_SCRIPT = VideoScript(
     title="How Photosynthesis Works",
@@ -14,8 +283,8 @@ DEMO_SCRIPT = VideoScript(
                 "Sunlight streams down carrying the energy that starts everything."
             ),
             visual_description=(
-                "A big smiling sun with wavy rays over rolling hills, with a small "
-                "sprout reaching up toward the light."
+                "A smiling sun with wavy rays over a landscape: shaded clouds, birds, "
+                "rolling hills, an apple tree, and a small sprout catching a sunbeam."
             ),
         ),
         Scene(
@@ -26,9 +295,9 @@ DEMO_SCRIPT = VideoScript(
                 "brought up from the roots."
             ),
             visual_description=(
-                "A large detailed leaf with veins in the center; a small sun with an "
-                "arrow, a puffy cloud with an arrow, and water droplets with an arrow "
-                "all pointing into the leaf."
+                "A large serrated leaf with detailed veins and roots; a sun, a CO2 "
+                "cloud with drifting molecules, and a rain cloud each sending an "
+                "arrow into the leaf."
             ),
         ),
         Scene(
@@ -39,98 +308,12 @@ DEMO_SCRIPT = VideoScript(
                 "oxygen is what you are breathing right now."
             ),
             visual_description=(
-                "A leaf with an arrow out to a sugar hexagon with a sparkle, oxygen "
-                "bubbles rising, and a happy stick figure breathing them in."
+                "A leaf-factory with a chimney releasing oxygen bubbles, an arrow to "
+                "a faceted sugar crystal with sparkles and an energy bolt, and a "
+                "happy stick figure breathing in the oxygen."
             ),
         ),
     ],
 )
 
-# Hand-authored line-art SVGs, one per scene, in natural drawing order.
-DEMO_SVGS = [
-    # Scene 1 — smiling sun with wavy rays over hills, a sprout reaching up
-    """<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
-  <path d="M 640,130 C 730,125 800,195 798,275 C 796,360 725,420 640,418
-           C 552,416 485,355 486,272 C 487,193 552,134 640,130 Z"
-        fill="none" stroke="#d37c1b" stroke-width="8"/>
-  <path d="M 590,240 C 596,232 606,232 612,240" fill="none" stroke="#222" stroke-width="6"/>
-  <path d="M 668,240 C 674,232 684,232 690,240" fill="none" stroke="#222" stroke-width="6"/>
-  <path d="M 585,320 C 610,352 668,352 694,318" fill="none" stroke="#222" stroke-width="6"/>
-  <path d="M 640,95 C 634,72 646,52 638,28"   fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 748,152 C 764,134 768,116 786,100" fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 822,270 C 846,266 862,274 888,268" fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 752,392 C 770,408 776,426 794,440" fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 530,394 C 512,410 506,428 488,442" fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 458,272 C 434,268 418,276 392,270" fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 534,150 C 518,132 514,114 496,98"  fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 90,600 C 240,520 420,520 560,588 C 600,606 640,610 690,596
-           C 830,528 1010,530 1180,606" fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 300,592 L 302,512" fill="none" stroke="#278243" stroke-width="6"/>
-  <path d="M 302,540 C 272,536 258,514 252,488 C 282,492 298,510 302,540 Z"
-        fill="none" stroke="#278243" stroke-width="6"/>
-  <path d="M 302,522 C 332,518 346,496 352,470 C 322,474 306,492 302,522 Z"
-        fill="none" stroke="#278243" stroke-width="6"/>
-</svg>""",
-    # Scene 2 — detailed leaf, three labeled inputs with arrows
-    """<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
-  <path d="M 640,160 C 840,196 912,372 806,486 C 752,542 692,566 640,572
-           C 588,566 528,542 474,486 C 368,372 440,196 640,160 Z"
-        fill="none" stroke="#278243" stroke-width="8"/>
-  <path d="M 640,178 C 636,300 638,430 642,556" fill="none" stroke="#278243" stroke-width="6"/>
-  <path d="M 640,262 C 688,282 724,314 748,352" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 640,262 C 592,282 556,314 532,352" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 641,360 C 686,378 716,406 736,440" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 641,360 C 596,378 566,406 546,440" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 642,452 C 676,466 698,486 712,508" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 642,452 C 608,466 586,486 572,508" fill="none" stroke="#278243" stroke-width="5"/>
-  <circle cx="200" cy="150" r="62" fill="none" stroke="#d37c1b" stroke-width="7"/>
-  <path d="M 200,66 L 200,38 M 284,150 L 312,150 M 260,90 L 280,70 M 260,210 L 280,230 M 140,90 L 120,70"
-        fill="none" stroke="#d37c1b" stroke-width="6"/>
-  <path d="M 292,214 C 356,252 414,282 470,306" fill="none" stroke="#d37c1b" stroke-width="7"/>
-  <path d="M 470,306 L 416,300 M 470,306 L 442,258" fill="none" stroke="#d37c1b" stroke-width="7"/>
-  <path d="M 1005,120 C 1042,104 1088,112 1100,142 C 1132,138 1152,162 1142,186
-           C 1156,208 1136,232 1104,230 C 1064,246 1010,238 996,212
-           C 962,210 948,180 966,158 C 962,136 980,122 1005,120 Z"
-        fill="none" stroke="#6e6e6e" stroke-width="6"/>
-  <path d="M 986,262 C 924,300 866,330 810,354" fill="none" stroke="#6e6e6e" stroke-width="7"/>
-  <path d="M 810,354 L 864,348 M 810,354 L 838,306" fill="none" stroke="#6e6e6e" stroke-width="7"/>
-  <path d="M 208,536 C 188,568 188,594 208,610 C 228,594 228,568 208,536 Z"
-        fill="none" stroke="#1a6fb0" stroke-width="6"/>
-  <path d="M 282,570 C 266,596 266,616 282,630 C 298,616 298,596 282,570 Z"
-        fill="none" stroke="#1a6fb0" stroke-width="6"/>
-  <path d="M 330,540 C 396,528 462,516 520,502" fill="none" stroke="#1a6fb0" stroke-width="7"/>
-  <path d="M 520,502 L 470,522 M 520,502 L 464,488" fill="none" stroke="#1a6fb0" stroke-width="7"/>
-</svg>""",
-    # Scene 3 — leaf producing sugar + oxygen, stick figure breathing
-    """<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
-  <path d="M 340,220 C 480,246 532,372 456,456 C 416,498 372,516 336,520
-           C 300,516 256,498 216,456 C 140,372 200,246 340,220 Z"
-        fill="none" stroke="#278243" stroke-width="8"/>
-  <path d="M 338,236 C 334,326 336,424 340,506" fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 338,310 C 372,326 396,350 412,378 M 338,310 C 304,326 280,350 264,378"
-        fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 339,400 C 368,414 386,432 398,454 M 339,400 C 310,414 292,432 280,454"
-        fill="none" stroke="#278243" stroke-width="5"/>
-  <path d="M 480,368 C 540,366 600,364 656,362" fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 656,362 L 606,340 M 656,362 L 608,388" fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 700,330 L 760,296 L 822,330 L 822,398 L 760,432 L 700,398 Z"
-        fill="none" stroke="#c0392b" stroke-width="7"/>
-  <path d="M 760,296 L 760,432 M 700,330 L 822,398 M 822,330 L 700,398"
-        fill="none" stroke="#c0392b" stroke-width="4"/>
-  <path d="M 856,270 L 856,242 M 842,256 L 870,256" fill="none" stroke="#d37c1b" stroke-width="5"/>
-  <circle cx="420" cy="252" r="20" fill="none" stroke="#1a6fb0" stroke-width="6"/>
-  <circle cx="474" cy="192" r="15" fill="none" stroke="#1a6fb0" stroke-width="6"/>
-  <circle cx="540" cy="140" r="11" fill="none" stroke="#1a6fb0" stroke-width="5"/>
-  <circle cx="614" cy="104" r="8"  fill="none" stroke="#1a6fb0" stroke-width="5"/>
-  <circle cx="1010" cy="180" r="46" fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 994,172 L 998,176 M 1026,172 L 1030,176" fill="none" stroke="#222" stroke-width="5"/>
-  <path d="M 992,200 C 1002,210 1020,210 1030,200" fill="none" stroke="#222" stroke-width="5"/>
-  <path d="M 1010,226 L 1010,384" fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 1010,270 C 976,290 950,310 934,332 M 1010,270 C 1044,290 1070,310 1086,332"
-        fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 1010,384 C 992,420 976,452 962,478 M 1010,384 C 1028,420 1044,452 1058,478"
-        fill="none" stroke="#222" stroke-width="7"/>
-  <path d="M 862,150 C 886,142 904,148 918,160 M 872,178 C 894,172 910,176 922,186"
-        fill="none" stroke="#1a6fb0" stroke-width="5"/>
-</svg>""",
-]
+DEMO_SVGS = [_scene1(), _scene2(), _scene3()]

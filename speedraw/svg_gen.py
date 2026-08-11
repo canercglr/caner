@@ -14,18 +14,28 @@ Hard requirements:
 - viewBox="0 0 1280 720".
 - Use ONLY these elements: <path>, <line>, <circle>, <ellipse>, <rect>,
   <polyline>. No <text>, <g>, <defs>, gradients, images, or transforms.
-- Every element: fill="none", stroke, stroke-width 4-8. Palette: near-black
-  "#222" for main outlines plus 2-3 supporting colors from
-  {"#c0392b", "#1a6fb0", "#278243", "#d37c1b", "#6c3c9e"} used meaningfully
-  (sun = orange, water = blue, plant = green, ...).
-- Aim for 15-40 strokes: one LARGE central subject drawn with confident cartoon
-  outlines, 2-4 supporting elements, and arrows/motion lines where helpful.
-  Detail belongs in expressive silhouettes, not in tiny features.
+- Every element: fill="none", stroke, stroke-width 3-8 (thick 6-8 for main
+  outlines, thin 3-4 for interior detail and shading). Palette: near-black
+  "#222" for main outlines plus 2-4 supporting colors from
+  {"#c0392b", "#1a6fb0", "#278243", "#d37c1b", "#6c3c9e", "#7a4a22", "#6e6e6e"}
+  used meaningfully (sun = orange, water = blue, plant = green, wood = brown).
+- Draw a RICH, complete illustration: aim for 40-100 strokes. Build it in
+  layers like an illustrator would:
+  1. One large, detailed main subject with interior detail (features, veins,
+     panels, windows, spokes — whatever fits the subject).
+  2. 3-6 supporting elements that set the scene (ground line, clouds, tools,
+     small figures, secondary objects).
+  3. Shading: groups of 3-6 short parallel hatch lines (thin, width 3) on the
+     shadow side of major shapes — this makes drawings look finished.
+  4. Arrows, motion lines, sparkles, or labels-as-icons last.
+- Pack several pen-lifts into one <path> using multiple "M" subpaths (great
+  for hatching, rain, rays); the renderer lifts the pen between them.
 - Prefer organic, slightly wavy cubic curves ("C") over ruler-straight lines
   and perfect symmetry — it should feel drawn by a person, not a plotter.
-  Faces, stick figures, and simple icons are welcome and read very well.
+  Faces, stick figures, and expressive cartoon detail read very well.
 - Order the elements in the order a person would naturally draw them:
-  main subject outline -> its details -> supporting elements -> arrows last.
+  main subject outline -> its interior detail -> supporting elements ->
+  shading -> arrows last.
 - Compose deliberately: main subject roughly centered or on one side with
   supporting elements balancing it. Keep everything inside x=[80,1200],
   y=[60,600] (the bottom strip is reserved for a caption).
