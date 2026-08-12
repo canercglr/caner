@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from .demo_content import (
     BLUE, BROWN, GRAY, GREEN, INK, RED, SUN,
-    _cloud, _el, _flower, _grass, _hatch, _lobed, _rays, _shadow, _wavy_circle,
+    _cloud, _el, _grass, _hatch, _lobed, _rays, _wavy_circle,
 )
 
 MOTIONS = {
@@ -87,7 +87,9 @@ def _p_star(x, y, s):
 
 def _p_cloud(x, y, s):
     return [
-        _el(_cloud(x, y, 0.8 * s), GRAY, 5),
+        # a smaller sibling puff floating behind gives the sky depth
+        _el(_cloud(x + 78 * s, y - 20 * s, 0.42 * s), GRAY, 4),
+        _el(_cloud(x, y, 0.8 * s), GRAY, 5, fill=SNOW),
         _el(_hatch(x - 60 * s, y + 26 * s, 110 * s, 14 * s, 5), GRAY, 3),
     ]
 
@@ -105,34 +107,81 @@ def _p_rain(x, y, s):
 
 # --- landscape ------------------------------------------------------------
 
+GREEN_D = "#256b41"     # back-canopy / shaded foliage
+GREEN_L = "#48945f"     # highlight foliage
+SNOW = "#eef0ee"
+
+
 def _p_tree(x, y, s):
     return [
-        _el(f"M {x-26*s:.0f},{y:.0f} C {x-22*s:.0f},{y-46*s:.0f} {x-28*s:.0f},{y-96*s:.0f} {x-10*s:.0f},{y-134*s:.0f} "
-            f"M {x+26*s:.0f},{y:.0f} C {x+22*s:.0f},{y-48*s:.0f} {x+28*s:.0f},{y-92*s:.0f} {x+10*s:.0f},{y-132*s:.0f}",
+        # trunk with a root flare and bark strokes
+        _el(f"M {x-24*s:.0f},{y:.0f} C {x-20*s:.0f},{y-46*s:.0f} {x-26*s:.0f},{y-96*s:.0f} {x-9*s:.0f},{y-138*s:.0f} "
+            f"M {x+24*s:.0f},{y:.0f} C {x+20*s:.0f},{y-48*s:.0f} {x+26*s:.0f},{y-92*s:.0f} {x+9*s:.0f},{y-136*s:.0f} "
+            f"M {x-24*s:.0f},{y:.0f} C {x-30*s:.0f},{y-2*s:.0f} {x-36*s:.0f},{y-1*s:.0f} {x-40*s:.0f},{y:.0f} "
+            f"M {x+24*s:.0f},{y:.0f} C {x+30*s:.0f},{y-2*s:.0f} {x+36*s:.0f},{y-1*s:.0f} {x+40*s:.0f},{y:.0f}",
             BROWN, 6),
-        _el(_lobed(x, y - 188 * s, 92 * s, 68 * s, lobes=7, depth=0.18), GREEN, 6, fill=GREEN),
-        _el(_hatch(x - 74 * s, y - 158 * s, 60 * s, 32 * s, 5), GREEN, 3),
+        _el(f"M {x-8*s:.0f},{y-20*s:.0f} C {x-4*s:.0f},{y-42*s:.0f} {x-8*s:.0f},{y-60*s:.0f} {x-4*s:.0f},{y-78*s:.0f} "
+            f"M {x+9*s:.0f},{y-34*s:.0f} C {x+6*s:.0f},{y-52*s:.0f} {x+10*s:.0f},{y-66*s:.0f} {x+6*s:.0f},{y-82*s:.0f}",
+            BROWN, 3),
+        # branches reaching into the canopy
+        _el(f"M {x-6*s:.0f},{y-120*s:.0f} C {x-30*s:.0f},{y-140*s:.0f} {x-46*s:.0f},{y-150*s:.0f} {x-58*s:.0f},{y-168*s:.0f} "
+            f"M {x+6*s:.0f},{y-122*s:.0f} C {x+28*s:.0f},{y-142*s:.0f} {x+44*s:.0f},{y-150*s:.0f} {x+56*s:.0f},{y-170*s:.0f}",
+            BROWN, 4),
+        # layered canopy: dark back lobe, two mid lobes, light crown
+        _el(_lobed(x, y - 192 * s, 96 * s, 70 * s, lobes=7, depth=0.18), GREEN_D, 5, fill=GREEN_D),
+        _el(_lobed(x - 46 * s, y - 172 * s, 52 * s, 40 * s, lobes=5, depth=0.2), GREEN, 5, fill=GREEN),
+        _el(_lobed(x + 42 * s, y - 176 * s, 56 * s, 42 * s, lobes=5, depth=0.2), GREEN, 5, fill=GREEN),
+        _el(_lobed(x - 2 * s, y - 214 * s, 54 * s, 38 * s, lobes=5, depth=0.2), GREEN_L, 5, fill=GREEN_L),
+        _el(_hatch(x - 72 * s, y - 168 * s, 52 * s, 26 * s, 4), GREEN_D, 3),
+        _el(_hatch(x + 18 * s, y - 236 * s, 44 * s, 20 * s, 3), GREEN_L, 3),
     ]
 
 
 def _p_bush(x, y, s):
     return [
-        _el(_lobed(x, y - 26 * s, 52 * s, 30 * s, lobes=5, depth=0.2), GREEN, 4, fill=GREEN),
-        _el(_hatch(x - 26 * s, y - 28 * s, 44 * s, 20 * s, 4), GREEN, 3),
+        _el(_lobed(x - 26 * s, y - 22 * s, 40 * s, 26 * s, lobes=5, depth=0.2), GREEN_D, 4, fill=GREEN_D),
+        _el(_lobed(x + 20 * s, y - 24 * s, 44 * s, 28 * s, lobes=5, depth=0.2), GREEN, 4, fill=GREEN),
+        _el(_hatch(x - 4 * s, y - 30 * s, 36 * s, 18 * s, 4), GREEN_L, 3),
+        # a few berries
+        _el(f"M {x-30*s:.0f},{y-24*s:.0f} L {x-30*s:.0f},{y-24*s:.0f} "
+            f"M {x+8*s:.0f},{y-34*s:.0f} L {x+8*s:.0f},{y-34*s:.0f} "
+            f"M {x+30*s:.0f},{y-18*s:.0f} L {x+30*s:.0f},{y-18*s:.0f}", RED, 7),
     ]
 
 
 def _p_mountain(x, y, s):
     return [
+        # filled body, snow cap, ridge lines running down the face
         _el(f"M {x-190*s:.0f},{y:.0f} C {x-120*s:.0f},{y-140*s:.0f} {x-70*s:.0f},{y-190*s:.0f} {x-30*s:.0f},{y-210*s:.0f} "
-            f"C {x+30*s:.0f},{y-180*s:.0f} {x+110*s:.0f},{y-80*s:.0f} {x+180*s:.0f},{y:.0f}", INK, 6),
+            f"C {x+30*s:.0f},{y-180*s:.0f} {x+110*s:.0f},{y-80*s:.0f} {x+180*s:.0f},{y:.0f} Z", GRAY, 6, fill=GRAY),
         _el(f"M {x-64*s:.0f},{y-168*s:.0f} L {x-44*s:.0f},{y-182*s:.0f} L {x-26*s:.0f},{y-168*s:.0f} "
-            f"L {x-8*s:.0f},{y-186*s:.0f} L {x+12*s:.0f},{y-168*s:.0f}", GRAY, 4),
+            f"L {x-8*s:.0f},{y-186*s:.0f} L {x+12*s:.0f},{y-168*s:.0f} "
+            f"C {x-4*s:.0f},{y-196*s:.0f} {x-16*s:.0f},{y-204*s:.0f} {x-30*s:.0f},{y-210*s:.0f} "
+            f"C {x-44*s:.0f},{y-200*s:.0f} {x-56*s:.0f},{y-186*s:.0f} {x-64*s:.0f},{y-168*s:.0f} Z",
+            GRAY, 4, fill=SNOW),
+        _el(f"M {x-40*s:.0f},{y-160*s:.0f} C {x-52*s:.0f},{y-110*s:.0f} {x-60*s:.0f},{y-60*s:.0f} {x-76*s:.0f},{y:.0f} "
+            f"M {x+2*s:.0f},{y-160*s:.0f} C {x+22*s:.0f},{y-104*s:.0f} {x+40*s:.0f},{y-52*s:.0f} {x+62*s:.0f},{y:.0f}",
+            INK, 3),
     ]
 
 
 def _p_flower(x, y, s):
-    return _flower(x, y - 34 * s, s, RED)
+    cy = y - 44 * s
+    parts = [
+        _el(f"M {x:.0f},{y:.0f} C {x-3*s:.0f},{y-16*s:.0f} {x+3*s:.0f},{y-30*s:.0f} {x:.0f},{cy+12*s:.0f}", GREEN, 4),
+        _el(f"M {x:.0f},{y-16*s:.0f} C {x-10*s:.0f},{y-20*s:.0f} {x-14*s:.0f},{y-26*s:.0f} {x-15*s:.0f},{y-32*s:.0f} "
+            f"C {x-8*s:.0f},{y-30*s:.0f} {x-3*s:.0f},{y-24*s:.0f} {x:.0f},{y-16*s:.0f} Z", GREEN, 3, fill=GREEN),
+        _el(f"M {x:.0f},{y-24*s:.0f} C {x+10*s:.0f},{y-28*s:.0f} {x+14*s:.0f},{y-34*s:.0f} {x+15*s:.0f},{y-40*s:.0f} "
+            f"C {x+8*s:.0f},{y-38*s:.0f} {x+3*s:.0f},{y-32*s:.0f} {x:.0f},{y-24*s:.0f} Z", GREEN, 3, fill=GREEN),
+    ]
+    for i in range(5):
+        a = -math.pi / 2 + i * 2 * math.pi / 5
+        px = x + 12 * s * math.cos(a)
+        py = cy + 12 * s * math.sin(a)
+        parts.append(_el(_wavy_circle(px, py, 8.5 * s, bumps=5, amp=0.8),
+                         RED, 3, fill=RED))
+    parts.append(_el(_wavy_circle(x, cy, 6.5 * s, bumps=5, amp=0.6), SUN, 3, fill=SUN))
+    return parts
 
 
 def _p_grass(x, y, s):
@@ -150,17 +199,39 @@ def _p_rock(x, y, s):
 
 def _p_house(x, y, s):
     w, h = 150 * s, 110 * s
-    return [
+    parts = [
         _el(f"M {x-w/2:.0f},{y:.0f} L {x-w/2:.0f},{y-h:.0f} L {x+w/2:.0f},{y-h:.0f} L {x+w/2:.0f},{y:.0f} Z", INK, 6, fill="#cbb98f"),
         _el(f"M {x-w/2-16*s:.0f},{y-h:.0f} L {x:.0f},{y-h-64*s:.0f} L {x+w/2+16*s:.0f},{y-h:.0f} Z", RED, 6, fill=RED),
+        # shingle strokes along the roof
+        _el(f"M {x-w*0.3:.0f},{y-h-18*s:.0f} C {x-w*0.1:.0f},{y-h-24*s:.0f} {x+w*0.1:.0f},{y-h-24*s:.0f} {x+w*0.3:.0f},{y-h-18*s:.0f} "
+            f"M {x-w*0.18:.0f},{y-h-38*s:.0f} C {x-w*0.04:.0f},{y-h-43*s:.0f} {x+w*0.06:.0f},{y-h-43*s:.0f} {x+w*0.18:.0f},{y-h-38*s:.0f}",
+            "#8f3630", 3),
+        # door with a knob and a little step
         _el(f"M {x-18*s:.0f},{y:.0f} L {x-18*s:.0f},{y-56*s:.0f} C {x-18*s:.0f},{y-64*s:.0f} "
             f"{x+18*s:.0f},{y-64*s:.0f} {x+18*s:.0f},{y-56*s:.0f} L {x+18*s:.0f},{y:.0f}", BROWN, 5),
+        _el(f"M {x+10*s:.0f},{y-30*s:.0f} L {x+10*s:.0f},{y-30*s:.0f}", INK, 6),
+        _el(f"M {x-26*s:.0f},{y:.0f} L {x+26*s:.0f},{y:.0f}", GRAY, 4),
+        # two four-pane windows with sills
         _el(_wavy_circle(x - w * 0.28, y - h * 0.62, 17 * s, bumps=6, amp=1) +
             f" M {x-w*0.28-17*s:.0f},{y-h*0.62:.0f} L {x-w*0.28+17*s:.0f},{y-h*0.62:.0f}"
             f" M {x-w*0.28:.0f},{y-h*0.62-17*s:.0f} L {x-w*0.28:.0f},{y-h*0.62+17*s:.0f}", BLUE, 3),
+        _el(_wavy_circle(x + w * 0.28, y - h * 0.62, 17 * s, bumps=6, amp=1) +
+            f" M {x+w*0.28-17*s:.0f},{y-h*0.62:.0f} L {x+w*0.28+17*s:.0f},{y-h*0.62:.0f}"
+            f" M {x+w*0.28:.0f},{y-h*0.62-17*s:.0f} L {x+w*0.28:.0f},{y-h*0.62+17*s:.0f}", BLUE, 3),
+        _el(f"M {x-w*0.28-20*s:.0f},{y-h*0.62+18*s:.0f} L {x-w*0.28+20*s:.0f},{y-h*0.62+18*s:.0f} "
+            f"M {x+w*0.28-20*s:.0f},{y-h*0.62+18*s:.0f} L {x+w*0.28+20*s:.0f},{y-h*0.62+18*s:.0f}", INK, 3),
+        # chimney with drifting smoke puffs
         _el(f"M {x+w*0.34:.0f},{y-h-30*s:.0f} L {x+w*0.34:.0f},{y-h-58*s:.0f} "
             f"L {x+w*0.2:.0f},{y-h-58*s:.0f} L {x+w*0.2:.0f},{y-h-42*s:.0f}", GRAY, 4),
     ]
+    cx = x + w * 0.27
+    cy = y - h - 70 * s
+    parts.append(_el(
+        _wavy_circle(cx, cy, 8 * s, bumps=5, amp=1) + " " +
+        _wavy_circle(cx + 8 * s, cy - 18 * s, 11 * s, bumps=5, amp=1.2) + " " +
+        _wavy_circle(cx + 20 * s, cy - 38 * s, 14 * s, bumps=6, amp=1.4),
+        GRAY, 3, anim="drift:10,-16,90"))
+    return parts
 
 
 def _p_bench(x, y, s):
@@ -179,11 +250,21 @@ def _p_car(x, y, s):
         _el(f"M {x-w/2:.0f},{y-16*s:.0f} C {x-w/2:.0f},{y-44*s:.0f} {x-w*0.3:.0f},{y-50*s:.0f} {x-w*0.22:.0f},{y-52*s:.0f} "
             f"L {x-w*0.12:.0f},{y-76*s:.0f} C {x:.0f},{y-84*s:.0f} {x+w*0.2:.0f},{y-80*s:.0f} {x+w*0.26:.0f},{y-54*s:.0f} "
             f"C {x+w*0.44:.0f},{y-48*s:.0f} {x+w/2:.0f},{y-38*s:.0f} {x+w/2:.0f},{y-16*s:.0f} Z", RED, 6, fill=RED),
-        _el(f"M {x-w*0.08:.0f},{y-56*s:.0f} L {x-w*0.06:.0f},{y-72*s:.0f} L {x+w*0.14:.0f},{y-70*s:.0f} L {x+w*0.16:.0f},{y-56*s:.0f}", BLUE, 3),
+        # glazed side window + door seam and handle
+        _el(f"M {x-w*0.08:.0f},{y-56*s:.0f} L {x-w*0.06:.0f},{y-72*s:.0f} L {x+w*0.14:.0f},{y-70*s:.0f} "
+            f"L {x+w*0.16:.0f},{y-56*s:.0f} Z", BLUE, 3, fill="#b9d2e4"),
+        _el(f"M {x+w*0.18:.0f},{y-52*s:.0f} C {x+w*0.19:.0f},{y-40*s:.0f} {x+w*0.19:.0f},{y-30*s:.0f} {x+w*0.18:.0f},{y-20*s:.0f} "
+            f"M {x+w*0.08:.0f},{y-46*s:.0f} L {x+w*0.15:.0f},{y-46*s:.0f}", "#7c2f28", 3),
+        # headlight + tail light
+        _el(f"M {x+w/2-4*s:.0f},{y-34*s:.0f} L {x+w/2-4*s:.0f},{y-34*s:.0f}", SUN, 8),
+        _el(f"M {x-w/2+4*s:.0f},{y-34*s:.0f} L {x-w/2+4*s:.0f},{y-34*s:.0f}", "#8f3630", 7),
+        # wheels with filled hubs
         _el(_wavy_circle(x - w * 0.28, y - 8 * s, 17 * s, bumps=6, amp=1) +
-            f" M {x-w*0.28-9*s:.0f},{y-8*s:.0f} L {x-w*0.28+9*s:.0f},{y-8*s:.0f}", INK, 4, anim="spin:1.4"),
+            f" M {x-w*0.28-9*s:.0f},{y-8*s:.0f} L {x-w*0.28+9*s:.0f},{y-8*s:.0f}"
+            f" M {x-w*0.28:.0f},{y-17*s:.0f} L {x-w*0.28:.0f},{y+1*s:.0f}", INK, 4, anim="spin:1.4"),
         _el(_wavy_circle(x + w * 0.3, y - 8 * s, 17 * s, bumps=6, amp=1) +
-            f" M {x+w*0.3-9*s:.0f},{y-8*s:.0f} L {x+w*0.3+9*s:.0f},{y-8*s:.0f}", INK, 4, anim="spin:1.4"),
+            f" M {x+w*0.3-9*s:.0f},{y-8*s:.0f} L {x+w*0.3+9*s:.0f},{y-8*s:.0f}"
+            f" M {x+w*0.3:.0f},{y-17*s:.0f} L {x+w*0.3:.0f},{y+1*s:.0f}", INK, 4, anim="spin:1.4"),
     ]
 
 
@@ -362,6 +443,28 @@ _PROPS = {
 }
 
 PROP_KINDS = sorted(_PROPS.keys())
+
+def ground_svg() -> List[str]:
+    """Rich ground band shared by story shots: a scribble-filled rolling
+    hill, the winding ink ground line, grass tufts and a few pebbles."""
+    Y = 585
+    parts = [
+        _el(f"M -6,{Y + 1} C 200,{Y - 9} 420,{Y + 4} 640,{Y - 2} "
+            f"C 860,{Y - 8} 1080,{Y + 3} 1286,{Y - 3} L 1286,748 L -6,748 Z",
+            "#9fbf97", 3, fill="#9fbf97"),
+        _el(f"M 8,{Y + 4} C 380,{Y - 9} 900,{Y + 7} 1274,{Y - 2}", INK, 5),
+    ]
+    for i, gx in enumerate((90, 210, 330, 480, 590, 700, 820, 940, 1060, 1180)):
+        gy = Y + 16 + ((i * 37) % 16)
+        parts.append(_grass(gx, gy))
+    for gx, r in ((150, 7), (620, 9), (1010, 6)):
+        parts.append(_el(_wavy_circle(gx, Y + 26, r, bumps=5, amp=0.7), GRAY, 3))
+    return parts
+
+
+# prop kinds that live in the sky / far background: they go on the far
+# parallax layer and shift more slowly under camera moves
+FAR_KINDS = {"sun", "moon", "star", "cloud", "mountain"}
 
 # soft ground-shadow half-widths (px at scale 1) for sun-aware shadows
 PROP_SHADOW_W = {

@@ -60,6 +60,9 @@ def main(argv=None) -> int:
                         help="skip the animated title card")
     parser.add_argument("--no-music", action="store_true",
                         help="disable the procedural background music bed")
+    parser.add_argument("--no-ai-scenery", action="store_true",
+                        help="story mode: skip the Claude-drawn per-shot "
+                             "scenery pass and use only the procedural props")
     parser.add_argument("--music-volume", type=float, default=None,
                         help="music bed volume 0.0-1.0 (default: 0.3 story, "
                              "0.22 explainer)")
@@ -91,6 +94,7 @@ def main(argv=None) -> int:
                 fps=args.fps,
                 demo=args.demo,
                 title_card=not args.no_title,
+                ai_scenery=not args.no_ai_scenery,
                 music=not args.no_music,
                 music_volume=args.music_volume if args.music_volume is not None else 0.3,
                 workdir=args.workdir,

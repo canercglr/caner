@@ -172,6 +172,19 @@ def _apply_visemes(o, z, spans, fps) -> None:
                 z[fi] = min(z[fi], 0.45)
 
 
+def _cam_crop(img: Image.Image, cx: float, cy: float, z: float,
+              canvas: Tuple[int, int]) -> Image.Image:
+    """Crop a virtual-camera view (center cx,cy at zoom z) and rescale."""
+    cw, ch = canvas
+    if z <= 1.004:
+        return img.copy()
+    w2, h2 = cw / z, ch / z
+    x0 = min(max(cx - w2 / 2, 0), cw - w2)
+    y0 = min(max(cy - h2 / 2, 0), ch - h2)
+    return img.crop((int(x0), int(y0), int(x0 + w2), int(y0 + h2))).resize(
+        canvas, Image.BICUBIC)
+
+
 @dataclass
 class ActorTrack:
     visual: ActorVisual
@@ -231,6 +244,7 @@ def run_story_pipeline(
     fps: int = 30,
     demo: bool = False,
     title_card: bool = True,
+    ai_scenery: bool = True,
     music: bool = True,
     music_volume: float = 0.3,
     workdir: Optional[Path] = None,
@@ -251,6 +265,25 @@ def run_story_pipeline(
         story = generate_story(client, topic, model)
     log(f'story ready: "{story.title}" — {len(story.shots)} shots, '
         f"{len(story.actors)} actors")
+
+    # Claude dresses each shot with extra scenery (skipped in demo mode)
+    scenery_far_extra: Dict[int, List[str]] = {}
+    scenery_near_extra: Dict[int, List[str]] = {}
+    if not demo and ai_scenery:
+        from .story_scenery import generate_shot_scenery
+
+        for si, shot in enumerate(story.shots, 1):
+            try:
+                far_p, near_p = generate_shot_scenery(
+                    client, model, story.title, shot,
+                    getattr(shot, "mood", "day") or "day")
+                scenery_far_extra[si] = far_p
+                scenery_near_extra[si] = near_p
+                log(f"scenery {si}/{len(story.shots)}: "
+                    f"+{len(far_p) + len(near_p)} AI-drawn elements")
+            except Exception as exc:
+                log(f"scenery {si}: generation failed ({exc}); "
+                    "using procedural props only")
 
     tmp_created = workdir is None
     workdir = workdir or Path(tempfile.mkdtemp(prefix="speedraw_story_"))
@@ -334,25 +367,32 @@ def run_story_pipeline(
             log(f"shot {si}/{len(story.shots)}: {len(timed)} events, "
                 f"{shot_seconds:.1f}s")
 
-            # ---- scenery: static baked once, moving parts per frame -------
-            svg_parts: List[str] = []
+            # ---- scenery in two depth layers: far (sky, mountains) shifts
+            # slower than near (ground, props) under camera moves — parallax
+            from .props import FAR_KINDS, PROP_SHADOW_W, ground_svg
+
+            far_parts: List[str] = list(scenery_far_extra.get(si, []))
+            near_parts: List[str] = list(scenery_near_extra.get(si, []))
             for p in shot.props:
-                svg_parts.extend(prop_svg(p.kind, p.x, p.y, p.scale, p.motion))
-            gline = (f'<path d="M 60,{GROUND_Y} C 380,{GROUND_Y - 9} '
-                     f'900,{GROUND_Y + 7} 1220,{GROUND_Y - 4}" fill="none" '
-                     f'stroke="#28303f" stroke-width="5"/>')
-            svg = ('<svg viewBox="0 0 1280 720">' + gline + "".join(svg_parts)
-                   + "</svg>")
-            strokes = parse_svg_strokes(svg, canvas)
+                dst = far_parts if p.kind in FAR_KINDS else near_parts
+                dst.extend(prop_svg(p.kind, p.x, p.y, p.scale, p.motion))
+            near_parts = ground_svg() + near_parts
+            strokes_far = parse_svg_strokes(
+                '<svg viewBox="0 0 1280 720">' + "".join(far_parts) + "</svg>",
+                canvas)
+            strokes_near = parse_svg_strokes(
+                '<svg viewBox="0 0 1280 720">' + "".join(near_parts) + "</svg>",
+                canvas)
+
             mood = getattr(shot, "mood", "day") or "day"
-            bg = get_paper(canvas).copy()
-            apply_sky_wash(bg, mood)
-            bgd = ImageDraw.Draw(bg)
+            bg_far = get_paper(canvas).copy()
+            apply_sky_wash(bg_far, mood)
+            fard = ImageDraw.Draw(bg_far)
+            near_base = Image.new("RGBA", canvas, (0, 0, 0, 0))
+            nd = ImageDraw.Draw(near_base)
 
             # soft ground shadows, offset away from the sun and stretched
             # by low light (long golden-hour shadows, none under overcast)
-            from .props import PROP_SHADOW_W
-
             sh_k = SHADOW_STRETCH.get(mood, 1.0)
             sun_x = next((p.x for p in shot.props
                           if p.kind in ("sun", "moon", "streetlamp")), 640.0)
@@ -365,16 +405,21 @@ def run_story_pipeline(
                 cyp = GROUND_Y * sy + 6 * sy
                 rxp = half * sx * (1.0 + 0.35 * (sh_k - 1.0))
                 ryp = max(5.0, half * 0.16) * sy
-                bgd.ellipse([cxp - rxp, cyp - ryp, cxp + rxp, cyp + ryp],
-                            fill=(224, 222, 214))
+                nd.ellipse([cxp - rxp, cyp - ryp, cxp + rxp, cyp + ryp],
+                           fill=(224, 222, 214))
 
-            moving = []
-            for s in strokes:
+            moving_far, moving_near = [], []
+            for s in strokes_far:
                 if s.anim is None:
-                    draw_stroke_full(bg, s, draw=bgd)
+                    draw_stroke_full(bg_far, s, draw=fard)
                 else:
-                    moving.append(s)
-            add_light_glows(bg, shot.props, mood, sx, sy)
+                    moving_far.append(s)
+            for s in strokes_near:
+                if s.anim is None:
+                    draw_stroke_full(near_base, s, draw=nd)
+                else:
+                    moving_near.append(s)
+            add_light_glows(near_base, shot.props, mood, sx, sy)
 
             # ---- camera state for this shot ------------------------------
             cw, ch = canvas
@@ -396,15 +441,17 @@ def run_story_pipeline(
             # ---- shot state: emotions & positions evolve over the timeline
             for f in range(shot_frames):
                 tt = f / fps
-                frame = bg.copy()
-                d = ImageDraw.Draw(frame)
+                # near world layer (RGBA): ground, props, actors, bubbles.
+                # It gets the full camera move; the far layer only ~45%.
+                world = near_base.copy()
+                d = ImageDraw.Draw(world)
 
                 transforms = {}
-                for s in moving:
+                for s in moving_near:
                     key = id(s.anim)
                     if key not in transforms:
                         transforms[key] = _anim_offset(s.anim, tt)
-                    draw_stroke_full(frame, s, transform=transforms[key], draw=d)
+                    draw_stroke_full(world, s, transform=transforms[key], draw=d)
 
                 # actor states at time tt: replay the timeline up to this frame
                 aids = list(tracks.keys())
@@ -506,12 +553,12 @@ def run_story_pipeline(
                             resample=Image.BILINEAR)
                         anchor = (st["x"] + (anchor[0] - st["x"]) * sxf,
                                   ground + (anchor[1] - ground) * syf)
-                    frame.paste(layer, (0, 0), layer)
+                    world.paste(layer, (0, 0), layer)
                     if st["bubble"]:
                         bubbles.append((anchor, st["bubble"]))
 
                 for anchor, (text, age) in bubbles:
-                    draw_speech_bubble(frame, anchor, text or "", canvas,
+                    draw_speech_bubble(world, anchor, text or "", canvas,
                                        scale=sy, age=age)
 
                 # ---- camera: compute target, glide toward it, crop -------
@@ -538,12 +585,26 @@ def run_story_pipeline(
                 cam[0] += (tgt[0] - cam[0]) * k
                 cam[1] += (tgt[1] - cam[1]) * k
                 cam[2] += (tgt[2] - cam[2]) * k
-                if cam[2] > 1.004:
-                    w2, h2 = cw / cam[2], ch / cam[2]
-                    x0 = min(max(cam[0] - w2 / 2, 0), cw - w2)
-                    y0 = min(max(cam[1] - h2 / 2, 0), ch - h2)
-                    frame = frame.crop((int(x0), int(y0), int(x0 + w2),
-                                        int(y0 + h2))).resize(canvas, Image.BICUBIC)
+
+                # ---- parallax composite: far layer takes ~45% of the move
+                PAR = 0.45
+                if moving_far:
+                    fframe = bg_far.copy()
+                    fd = ImageDraw.Draw(fframe)
+                    for s in moving_far:
+                        key = id(s.anim)
+                        if key not in transforms:
+                            transforms[key] = _anim_offset(s.anim, tt)
+                        draw_stroke_full(fframe, s, transform=transforms[key],
+                                         draw=fd)
+                else:
+                    fframe = bg_far
+                frame = _cam_crop(fframe,
+                                  cw / 2 + (cam[0] - cw / 2) * PAR,
+                                  ch * 0.52 + (cam[1] - ch * 0.52) * PAR,
+                                  1.0 + (cam[2] - 1.0) * PAR, canvas)
+                nearc = _cam_crop(world, cam[0], cam[1], cam[2], canvas)
+                frame.paste(nearc, (0, 0), nearc)
 
                 frame = grade_frame(frame, mood)
 

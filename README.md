@@ -78,9 +78,11 @@ it out:
   far it opens, edge-tts word boundaries force the lips shut between words,
   and the zero-crossing rate picks the shape — round open vowels vs. wide
   flat consonants, with a dark mouth interior when wide open.
-- **Characters are doodle people**, not bare stick figures: shirt-coloured
-  torsos, four hair styles (spiky, curly, flat, bun), skin-tone hands,
-  shoes, and a soft ground shadow that shrinks when they jump.
+- **Characters are chibi doodle people**: big heads (~40% of body height),
+  large white-sclera eyes with gaze-following pupils and a light catch,
+  blush cheeks, shirt-coloured torsos, four hair styles (spiky, curly,
+  flat, bun), skin-tone hands, shoes, and a soft ground shadow that
+  shrinks when they jump.
 - **Classic animation principles** drive the movement. Jumps have
   anticipation (a crouch and arm wind-up), airborne stretch and a landing
   squash with bent knees — all **squash & stretch** is volume-preserving
@@ -103,10 +105,20 @@ it out:
   per-frame color grade (warm gold, dusky blue, muted gray...), longer
   shadows in low sun, and glowing halos around streetlamps and campfires
   after dark. Claude matches the mood to the story's emotional arc.
-- **The world moves too**: the same prop library used by explainer mode
-  (sun, clouds, trees, houses, cars with spinning wheels, balloons,
-  kites, rain, birds...) with motions — a balloon can drift away mid-story,
-  rain can fall, a ball can bounce.
+- **The world moves too**: a rich prop library (layered trees, houses with
+  smoking chimneys and four-pane windows, snow-capped mountains, cars with
+  spinning wheels, balloons, kites, rain, pets...) with motions — a balloon
+  can drift away mid-story, rain can fall, a ball can bounce. Every shot
+  stands on a **rich ground band**: a scribble-filled rolling hill with
+  grass tufts and pebbles instead of a bare line.
+- **Depth and parallax**: scenery lives on two layers — sky, clouds and
+  mountains sit on a far layer that follows the camera at ~45% speed, so
+  pans and zooms have real depth.
+- **Claude draws the scenery** (outside demo mode): each shot gets a
+  bespoke pass of AI-drawn SVG set dressing — terrain, flora, weather,
+  distant landscape matching the mood — layered around the procedural
+  props, with far elements tagged for parallax. Disable with
+  `--no-ai-scenery`.
 - **Cinematography**: each shot gets a camera move — `focus_speaker`
   glides toward whoever is talking, `slow_zoom_in`/`out` build tension or
   reveal the scene, `pan_left`/`right` travel across the world. Shots are
@@ -129,6 +141,7 @@ it out:
 | `--size WxH` | `1280x720` | Video resolution |
 | `--fps` | `30` | Frame rate |
 | `--no-title` | off | Skip the animated title card |
+| `--no-ai-scenery` | off | Story mode: skip the Claude-drawn scenery pass |
 | `--demo` | off | Use bundled content, no API calls |
 | `--workdir DIR` / `--keep-workdir` | temp | Inspect intermediate frames, SVGs, audio |
 
