@@ -55,6 +55,11 @@ def main(argv=None) -> int:
     parser.add_argument("--fps", type=int, default=30, help="frames per second (default: 30)")
     parser.add_argument("--no-title", action="store_true",
                         help="skip the animated title card")
+    parser.add_argument("--no-music", action="store_true",
+                        help="disable the procedural background music bed")
+    parser.add_argument("--music-volume", type=float, default=None,
+                        help="music bed volume 0.0-1.0 (default: 0.3 story, "
+                             "0.22 explainer)")
     parser.add_argument("--demo", action="store_true",
                         help="use bundled demo content instead of calling the API "
                              "(no ANTHROPIC_API_KEY needed)")
@@ -83,6 +88,8 @@ def main(argv=None) -> int:
                 fps=args.fps,
                 demo=args.demo,
                 title_card=not args.no_title,
+                music=not args.no_music,
+                music_volume=args.music_volume if args.music_volume is not None else 0.3,
                 workdir=args.workdir,
                 keep_workdir=args.keep_workdir,
             )
@@ -98,6 +105,8 @@ def main(argv=None) -> int:
                 fps=args.fps,
                 demo=args.demo,
                 title_card=not args.no_title,
+                music=not args.no_music,
+                music_volume=args.music_volume if args.music_volume is not None else 0.22,
                 workdir=args.workdir,
                 keep_workdir=args.keep_workdir,
             )

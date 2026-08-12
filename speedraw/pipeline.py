@@ -34,6 +34,8 @@ def run_pipeline(
     fps: int = 30,
     demo: bool = False,
     title_card: bool = True,
+    music: bool = True,
+    music_volume: float = 0.22,
     workdir: Optional[Path] = None,
     keep_workdir: bool = False,
 ) -> Path:
@@ -100,8 +102,16 @@ def run_pipeline(
             audio_files.append(wav)
             _pad_wav_to(wav, rendered)
 
+        music_wav = None
+        if music:
+            from .music import compose_music
+
+            log("composing background music ...")
+            music_wav = compose_music(frame_idx / fps, workdir / "music.wav")
+
         log(f"encoding video ({frame_idx} frames @ {fps}fps) ...")
-        build_video(frames_dir, audio_files, output, fps, workdir)
+        build_video(frames_dir, audio_files, output, fps, workdir,
+                    music=music_wav, music_volume=music_volume)
         log(f"done: {output}")
         return output
     finally:

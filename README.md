@@ -81,6 +81,15 @@ it out:
   (sun, clouds, trees, houses, cars with spinning wheels, balloons,
   kites, rain, birds...) with motions — a balloon can drift away mid-story,
   rain can fall, a ball can bounce.
+- **Cinematography**: each shot gets a camera move — `focus_speaker`
+  glides toward whoever is talking, `slow_zoom_in`/`out` build tension or
+  reveal the scene, `pan_left`/`right` travel across the world. Shots are
+  joined with a soft fade through the whiteboard.
+- **Background music**: a procedurally synthesized underscore (triangle
+  pads, plucked pentatonic arpeggio, sine bass over a I-V-vi-IV
+  progression — no assets, no network) is mixed under the video and
+  side-chain ducked beneath the dialogue. Works in explainer mode too;
+  control with `--no-music` / `--music-volume`.
 
 ### Options
 

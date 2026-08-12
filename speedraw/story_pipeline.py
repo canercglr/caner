@@ -163,6 +163,8 @@ def run_story_pipeline(
     fps: int = 30,
     demo: bool = False,
     title_card: bool = True,
+    music: bool = True,
+    music_volume: float = 0.3,
     workdir: Optional[Path] = None,
     keep_workdir: bool = False,
 ) -> Path:
@@ -274,6 +276,13 @@ def run_story_pipeline(
                 else:
                     moving.append(s)
 
+            # ---- camera state for this shot ------------------------------
+            cw, ch = canvas
+            cam = [cw / 2.0, ch * 0.52, 1.0]   # cx, cy, zoom
+            cam_kind = getattr(shot, "camera", "static") or "static"
+            fade_frames = max(1, int(0.32 * fps))
+            white = Image.new("RGB", canvas, BACKGROUND)
+
             # ---- shot state: emotions & positions evolve over the timeline
             for f in range(shot_frames):
                 tt = f / fps
@@ -351,6 +360,44 @@ def run_story_pipeline(
                     draw_speech_bubble(frame, anchor, text or "", canvas,
                                        scale=sy, age=age)
 
+                # ---- camera: compute target, glide toward it, crop -------
+                prog = f / max(1, shot_frames - 1)
+                vis_xs = [st["x"] for st in states.values()
+                          if -60 < st["x"] < cw + 60]
+                center_x = sum(vis_xs) / len(vis_xs) if vis_xs else cw / 2
+                tgt = (cw / 2.0, ch * 0.52, 1.0)
+                if cam_kind == "slow_zoom_in":
+                    tgt = (center_x, ch * 0.55, 1.0 + 0.17 * prog)
+                elif cam_kind == "slow_zoom_out":
+                    tgt = (center_x, ch * 0.55, 1.17 - 0.17 * prog)
+                elif cam_kind == "pan_left":
+                    tgt = (cw * (0.62 - 0.24 * prog), ch * 0.55, 1.12)
+                elif cam_kind == "pan_right":
+                    tgt = (cw * (0.38 + 0.24 * prog), ch * 0.55, 1.12)
+                elif cam_kind == "focus_speaker":
+                    speaker = next((st for st in states.values() if st["bubble"]), None)
+                    if speaker is not None:
+                        tgt = (speaker["x"], ground - 195 * sy, 1.30)
+                    else:
+                        tgt = (center_x, ch * 0.55, 1.06)
+                k = min(1.0, 3.5 / fps)
+                cam[0] += (tgt[0] - cam[0]) * k
+                cam[1] += (tgt[1] - cam[1]) * k
+                cam[2] += (tgt[2] - cam[2]) * k
+                if cam[2] > 1.004:
+                    w2, h2 = cw / cam[2], ch / cam[2]
+                    x0 = min(max(cam[0] - w2 / 2, 0), cw - w2)
+                    y0 = min(max(cam[1] - h2 / 2, 0), ch - h2)
+                    frame = frame.crop((int(x0), int(y0), int(x0 + w2),
+                                        int(y0 + h2))).resize(canvas, Image.BICUBIC)
+
+                # ---- shot transition: fade through the whiteboard --------
+                if si > 1 and f < fade_frames:
+                    frame = Image.blend(white, frame, (f + 1) / (fade_frames + 1))
+                if si < len(story.shots) and f >= shot_frames - fade_frames:
+                    a = (shot_frames - 1 - f) / fade_frames
+                    frame = Image.blend(white, frame, a)
+
                 frame.save(frames_dir / f"{frame_idx + f:06d}.png")
 
             # persist end-of-shot state
@@ -363,8 +410,16 @@ def run_story_pipeline(
             _shot_audio(shot_wav, timed, shot_frames / fps)
             audio_files.append(shot_wav)
 
+        music_wav = None
+        if music:
+            from .music import compose_music
+
+            log("composing background music ...")
+            music_wav = compose_music(frame_idx / fps, workdir / "music.wav")
+
         log(f"encoding video ({frame_idx} frames @ {fps}fps) ...")
-        build_video(frames_dir, audio_files, output, fps, workdir)
+        build_video(frames_dir, audio_files, output, fps, workdir,
+                    music=music_wav, music_volume=music_volume)
         log(f"done: {output}")
         return output
     finally:

@@ -33,8 +33,11 @@ def build_video(
     output: Path,
     fps: int,
     workdir: Path,
+    music: Path = None,
+    music_volume: float = 0.3,
 ) -> None:
-    """Mux the global frame sequence with the concatenated scene audio tracks."""
+    """Mux the global frame sequence with the concatenated scene audio tracks,
+    optionally mixing in a music bed ducked under the voice."""
     ffmpeg = _ffmpeg()
 
     # Concatenate scene audio via the concat filter (tolerates mixed formats).
@@ -54,15 +57,29 @@ def build_video(
     ]
     _run(cmd)
 
-    _run([
+    mux: List[str] = [
         ffmpeg, "-y",
         "-framerate", str(fps),
         "-i", str(frames_dir / "%06d.png"),
         "-i", str(audio_all),
+    ]
+    if music is not None and music.exists():
+        # music bed at music_volume, side-chain ducked by the voice track
+        mux += [
+            "-i", str(music),
+            "-filter_complex",
+            (f"[2:a]volume={music_volume}[m];"
+             "[m][1:a]sidechaincompress=threshold=0.015:ratio=6:"
+             "attack=80:release=600[md];"
+             "[1:a][md]amix=inputs=2:duration=first:normalize=0[aout]"),
+            "-map", "0:v", "-map", "[aout]",
+        ]
+    mux += [
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k",
         "-shortest",
         "-movflags", "+faststart",
         str(output),
-    ])
+    ]
+    _run(mux)

@@ -16,6 +16,8 @@ PropKind = Literal["sun", "moon", "star", "cloud", "rain", "tree", "bush",
                    "car", "ball", "balloon", "bird", "kite"]
 Motion = Literal["none", "drift_left", "drift_right", "rise", "fall_loop",
                  "bounce", "spin", "sway", "float", "pulse"]
+Camera = Literal["static", "slow_zoom_in", "slow_zoom_out", "pan_left",
+                 "pan_right", "focus_speaker"]
 
 
 class StoryActor(BaseModel):
@@ -61,6 +63,10 @@ class StoryEvent(BaseModel):
 class StoryShot(BaseModel):
     props: List[StoryProp] = Field(description="scene dressing for this shot")
     events: List[StoryEvent] = Field(description="4-9 sequential events")
+    camera: Camera = Field(
+        default="static",
+        description="camera move for the whole shot",
+    )
 
 
 class Story(BaseModel):
@@ -111,6 +117,11 @@ Craft rules:
   actors act.
 - Shots reuse the same world: keep prop continuity where it makes sense,
   and remember actor positions carry over between shots.
+- Give each shot a camera move: "focus_speaker" is best for dialogue-heavy
+  shots (the camera glides to whoever is talking); "slow_zoom_in" builds
+  tension or intimacy; "slow_zoom_out" reveals the scene or ends the story
+  wide; "pan_left"/"pan_right" travels across the scene (great when someone
+  walks somewhere); "static" for calm beats. Vary the moves across shots.
 """
 
 
@@ -152,6 +163,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="balloon", x=620, y=585, scale=1.0, motion="none"),
                 StoryProp(kind="flower", x=350, y=585, scale=1.2, motion="sway"),
             ],
+            camera="slow_zoom_in",
             events=[
                 StoryEvent(actor="pip", action="walk", to_x=430),
                 StoryEvent(actor="pip", action="say", text="What a perfect day for my balloon!",
@@ -168,6 +180,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="balloon", x=620, y=585, scale=1.0, motion="rise"),
                 StoryProp(kind="bird", x=300, y=200, scale=1.0, motion="drift_right"),
             ],
+            camera="focus_speaker",
             events=[
                 StoryEvent(actor="pip", action="emote", emotion="surprised"),
                 StoryEvent(actor="pip", action="say", text="Oh no! Come back!", emotion="surprised"),
@@ -192,6 +205,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="bird", x=1000, y=170, scale=0.8, motion="drift_left"),
                 StoryProp(kind="flower", x=350, y=585, scale=1.2, motion="sway"),
             ],
+            camera="slow_zoom_out",
             events=[
                 StoryEvent(actor="momo", action="run", to_x=820),
                 StoryEvent(actor="momo", action="say", text="Ta-da! Look what I brought!",
