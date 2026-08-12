@@ -41,11 +41,14 @@ def main(argv=None) -> int:
                         help="number of scenes to generate (default: 4)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"Claude model id (default: {DEFAULT_MODEL})")
-    parser.add_argument("--tts", choices=["auto", "edge", "espeak", "none"],
+    parser.add_argument("--tts",
+                        choices=["auto", "edge", "piper", "espeak", "none"],
                         default="auto",
                         help="voiceover engine: 'edge' = Microsoft neural voices "
-                             "(needs network), 'espeak' = offline, 'none' = silent, "
-                             "'auto' = edge with espeak/silence fallback (default)")
+                             "(needs network, emotion-aware), 'piper' = offline "
+                             "neural (model auto-downloads once), 'espeak' = "
+                             "offline basic, 'none' = silent, 'auto' = "
+                             "edge->piper->espeak fallback chain (default)")
     parser.add_argument("--voice", default=None,
                         help="voice: a language code like 'en', 'tr', 'de' or a full "
                              "Edge voice name like 'en-US-AriaNeural' "

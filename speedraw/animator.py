@@ -35,10 +35,9 @@ from PIL import Image, ImageDraw
 from svgpathtools import parse_path
 
 from .hand import get_hand_image
+from .paper import BACKGROUND, get_paper
 
 Point = Tuple[float, float]
-
-BACKGROUND = (252, 252, 250)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +71,8 @@ class Stroke:
     color: Tuple[int, int, int]
     width: int
     anim: Optional[AnimSpec] = None
+    fill: Optional[Tuple[int, int, int]] = None   # scribble-fill for closed shapes
+    closed: bool = False
 
     @property
     def length(self) -> float:
@@ -272,6 +273,7 @@ def parse_svg_strokes(svg_text: str, canvas: Tuple[int, int]) -> List[Stroke]:
         except ValueError:
             width = 5
         anim = _parse_anim(attrs.get("data-anim"))
+        fill = _parse_color(attrs.get("data-fill"))
         try:
             path = parse_path(d)
         except Exception:
@@ -298,8 +300,15 @@ def parse_svg_strokes(svg_text: str, canvas: Tuple[int, int]) -> List[Stroke]:
                 cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
             if cum[-1] < 1.0:
                 continue
+            try:
+                is_closed = bool(sub.isclosed())
+            except Exception:
+                is_closed = math.hypot(pts[0][0] - pts[-1][0],
+                                       pts[0][1] - pts[-1][1]) < 7.0
             group.append(Stroke(points=pts, cum_len=cum, color=color,
-                                width=width, anim=anim))
+                                width=width, anim=anim,
+                                fill=fill if is_closed else None,
+                                closed=is_closed))
 
         if anim is not None and group:
             _set_group_pivot(anim, group, seed=len(strokes))
@@ -475,6 +484,53 @@ def _draw_walker(draw: ImageDraw.ImageDraw, spec: WalkerSpec, t: float, progress
 # ---------------------------------------------------------------------------
 
 
+def _mix(a: Tuple[int, int, int], b: Tuple[int, int, int], t: float) -> Tuple[int, int, int]:
+    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))  # type: ignore[return-value]
+
+
+def _draw_scribble_fill(img: Image.Image, pts: List[Point],
+                        color: Tuple[int, int, int]) -> None:
+    """Colour the inside of a closed polyline with a marker-scribble tint."""
+    from PIL import ImageFilter
+
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, y0 = int(min(xs)) - 2, int(min(ys)) - 2
+    x1, y1 = int(max(xs)) + 3, int(max(ys)) + 3
+    w, h = x1 - x0, y1 - y0
+    if w < 4 or h < 4:
+        return
+
+    local = [(p[0] - x0, p[1] - y0) for p in pts]
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).polygon(local, fill=235)
+    mask = mask.filter(ImageFilter.GaussianBlur(1.1))  # slight marker bleed
+
+    tint = _mix(color, BACKGROUND, 0.62)
+    scrib = _mix(color, BACKGROUND, 0.40)
+    layer = Image.new("RGB", (w, h), tint)
+    ld = ImageDraw.Draw(layer)
+    # diagonal back-and-forth scribble strokes with a hand wobble
+    spacing = 9
+    phase = (x0 * 0.7 + y0 * 1.3) % (2 * math.pi)
+    for k, c in enumerate(range(-h, w + h, spacing)):
+        wob = 2.2 * math.sin(k * 1.7 + phase)
+        ld.line([(c + wob, -3), (c + h + wob, h + 3)], fill=scrib, width=3)
+    img.paste(layer, (x0, y0), mask)
+
+
+def draw_stroke_full(img: Image.Image, stroke: Stroke, transform=None,
+                     draw: Optional[ImageDraw.ImageDraw] = None) -> None:
+    """Draw a completed stroke: scribble fill (if any) beneath the outline."""
+    if stroke.fill is not None:
+        pts = stroke.points
+        if transform is not None:
+            pts = [transform(x, y) for x, y in pts]
+        _draw_scribble_fill(img, pts, stroke.fill)
+    _draw_stroke_upto(draw or ImageDraw.Draw(img), stroke, stroke.length,
+                      transform=transform)
+
+
 def _draw_stroke_upto(draw: ImageDraw.ImageDraw, stroke: Stroke, upto: float,
                       transform=None) -> Optional[Point]:
     """Draw a stroke up to `upto` px of its length. Returns the pen tip point."""
@@ -500,15 +556,19 @@ def _draw_stroke_upto(draw: ImageDraw.ImageDraw, stroke: Stroke, upto: float,
         segment = [transform(x, y) for x, y in segment]
         tip = segment[-1]
     if len(segment) >= 2:
-        # draw in short chunks with a subtly varying width — marker pressure feel
+        # draw in short chunks with a subtly varying width — marker pressure
+        # feel — tapering toward both ends of the stroke like a real nib
         base_w = stroke.width
         step = 6
         for j in range(0, len(segment) - 1, step):
             chunk = segment[j : j + step + 1]
             mid = seg_cum[min(j + step // 2, len(seg_cum) - 1)]
-            wv = base_w + round(0.9 * math.sin(mid / 34.0 + base_w))
-            draw.line(chunk, fill=stroke.color, width=max(2, wv), joint="curve")
-        r = base_w / 2
+            wv = base_w + 0.9 * math.sin(mid / 34.0 + base_w)
+            end_d = min(mid, stroke.length - mid)
+            taper = min(1.0, 0.55 + end_d / 30.0)
+            draw.line(chunk, fill=stroke.color, width=max(2, round(wv * taper)),
+                      joint="curve")
+        r = max(2.0, base_w * 0.62) / 2
         for px, py in (segment[0], segment[-1]):
             draw.ellipse([px - r, py - r, px + r, py + r], fill=stroke.color)
     return tip
@@ -560,7 +620,7 @@ class SceneAnimator:
 
         # Static strokes get baked into a base image once fully drawn, so each
         # frame only re-draws the in-progress stroke and the moving elements.
-        base = Image.new("RGB", self.canvas, BACKGROUND)
+        base = get_paper(self.canvas).copy()
         baked = [False] * len(strokes)
 
         idx = start_index
@@ -576,7 +636,7 @@ class SceneAnimator:
             for i, s in enumerate(strokes):
                 if (not baked[i] and s.anim is None
                         and revealed >= start_cum[i] + s.length - 1e-6):
-                    _draw_stroke_upto(base_draw, s, s.length)
+                    draw_stroke_full(base, s, draw=base_draw)
                     baked[i] = True
 
             frame = base.copy()
@@ -606,9 +666,9 @@ class SceneAnimator:
                         key = id(anim)
                         if key not in transforms:
                             transforms[key] = _anim_offset(anim, t_anim)
-                        _draw_stroke_upto(d, s, s.length, transform=transforms[key])
+                        draw_stroke_full(frame, s, transform=transforms[key], draw=d)
                     else:
-                        _draw_stroke_upto(d, s, s.length)
+                        draw_stroke_full(frame, s, draw=d)
 
             drawing_done = f >= draw_frames - 1 or revealed >= total_len
 

@@ -39,6 +39,12 @@ Hard requirements:
   keep generous empty space around the composition's focal point.
 - Pack several pen-lifts into one <path> using multiple "M" subpaths (great
   for hatching, rain, rays); the renderer lifts the pen between them.
+- COLOUR THINGS IN: add data-fill="#hex" to closed shapes and the renderer
+  fills them with a soft marker-scribble tint once the outline completes.
+  Use it on the major shapes (sun disc, foliage, bodies, roofs, objects) —
+  a mostly-coloured drawing looks dramatically more finished than pure line
+  art. Pick the fill from the same palette as the stroke (the renderer
+  lightens it automatically). Leave small details and hatching unfilled.
 - Prefer organic, slightly wavy cubic curves ("C") over ruler-straight lines
   and perfect symmetry — it should feel drawn by a person, not a plotter.
   Faces, stick figures, and expressive cartoon detail read very well.

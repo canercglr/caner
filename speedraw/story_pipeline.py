@@ -19,7 +19,9 @@ from typing import Dict, List, Optional, Tuple
 from PIL import Image, ImageDraw
 
 from .actor import ActorVisual, draw_actor, draw_speech_bubble
-from .animator import BACKGROUND, SceneAnimator, _anim_offset, _draw_stroke_upto, parse_svg_strokes
+from .animator import (SceneAnimator, _anim_offset, draw_stroke_full,
+                       parse_svg_strokes)
+from .paper import get_paper
 from .assembler import build_video
 from .pipeline import DEFAULT_MODEL, log
 from .props import prop_svg
@@ -35,6 +37,18 @@ ACTOR_COLORS = {
     "blue": (57, 114, 158),
     "red": (184, 69, 60),
     "green": (47, 125, 79),
+}
+SHIRT_COLORS = {
+    "ink": (110, 122, 148),
+    "blue": (96, 150, 190),
+    "red": (203, 112, 102),
+    "green": (104, 158, 118),
+}
+HAIR_COLORS = {
+    "ink": (58, 46, 38),
+    "blue": (98, 66, 42),
+    "red": (44, 42, 48),
+    "green": (122, 84, 46),
 }
 
 GESTURE_SECONDS = {"wave": 1.8, "jump": 1.1, "point_left": 1.5,
@@ -65,12 +79,15 @@ class TimedEvent:
     mouth: Optional[List[Tuple[float, float]]] = None  # (open, shape) per frame
 
 
-def _mouth_track(wav_path: Path, fps: int) -> List[Tuple[float, float]]:
+def _mouth_track(wav_path: Path, fps: int,
+                 words_json: Optional[Path] = None) -> List[Tuple[float, float]]:
     """Per-video-frame lip-sync track from the speech audio.
 
     Returns (open, shape) pairs: `open` is the normalized RMS loudness that
     drives how far the mouth opens; `shape` is the zero-crossing rate that
     separates round open vowels (low) from wide flat consonants (high).
+    When word-boundary timings exist (edge-tts), the mouth is additionally
+    forced shut in the gaps between words for word-accurate sync.
     """
     import numpy as np
 
@@ -101,6 +118,19 @@ def _mouth_track(wav_path: Path, fps: int) -> List[Tuple[float, float]]:
         t = np.arange(o.size) / fps
         o = np.clip(0.5 + 0.5 * np.sin(2 * math.pi * 3.0 * t), 0, 1) * 0.8
         z = np.full_like(o, 0.4)
+    elif words_json is not None and words_json.exists():
+        import json
+
+        try:
+            spans = json.loads(words_json.read_text(encoding="utf-8"))
+            in_word = np.zeros(o.size, dtype=bool)
+            for sp in spans:
+                i0 = max(0, int(sp["start"] * fps))
+                i1 = min(o.size, int(sp["end"] * fps) + 1)
+                in_word[i0:i1] = True
+            o = np.where(in_word, o, np.minimum(o, 0.06))
+        except Exception:
+            pass
     return list(zip(o.tolist(), z.tolist()))
 
 
@@ -198,9 +228,16 @@ def run_story_pipeline(
         tracks: Dict[str, ActorTrack] = {}
         voices: Dict[str, str] = {}
         for a in story.actors:
+            hair = getattr(a, "hair", None) or (
+                "curly" if a.voice == "female" else "spiky")
             tracks[a.id] = ActorTrack(
-                visual=ActorVisual(color=ACTOR_COLORS.get(a.color, ACTOR_COLORS["ink"]),
-                                   scale=0.92 * sy),
+                visual=ActorVisual(
+                    color=ACTOR_COLORS.get(a.color, ACTOR_COLORS["ink"]),
+                    scale=0.92 * sy,
+                    shirt=SHIRT_COLORS.get(a.color, SHIRT_COLORS["ink"]),
+                    hair=hair,
+                    hair_color=HAIR_COLORS.get(a.color, HAIR_COLORS["ink"]),
+                ),
                 x=a.start_x * sx,
                 facing=1.0 if a.start_x < canvas[0] / 2 else -1.0,
             )
@@ -230,11 +267,13 @@ def run_story_pipeline(
                 te = TimedEvent(ev=ev, start=t, dur=1.0, x0=tr.x, x1=tr.x)
                 if ev.action == "say":
                     wav = workdir / f"say_{si}_{ei}.wav"
+                    words_json = workdir / f"say_{si}_{ei}.words.json"
                     dur = synthesize(ev.text or "...", wav, engine=tts_engine,
-                                     voice=voices[ev.actor])
+                                     voice=voices[ev.actor], emotion=ev.emotion,
+                                     words_out=words_json)
                     _to_std_wav(wav)
                     te.wav = wav
-                    te.mouth = _mouth_track(wav, fps)
+                    te.mouth = _mouth_track(wav, fps, words_json)
                     te.dur = dur + 0.45
                 elif ev.action in ("walk", "run"):
                     speed = RUN_SPEED if ev.action == "run" else WALK_SPEED
@@ -267,12 +306,28 @@ def run_story_pipeline(
             svg = ('<svg viewBox="0 0 1280 720">' + gline + "".join(svg_parts)
                    + "</svg>")
             strokes = parse_svg_strokes(svg, canvas)
-            bg = Image.new("RGB", canvas, BACKGROUND)
+            bg = get_paper(canvas).copy()
             bgd = ImageDraw.Draw(bg)
+
+            # soft ground shadows, offset away from the sun
+            from .props import PROP_SHADOW_W
+
+            sun_x = next((p.x for p in shot.props if p.kind == "sun"), 640.0)
+            for p in shot.props:
+                half = PROP_SHADOW_W.get(p.kind, 0) * p.scale
+                if half <= 0:
+                    continue
+                off = max(-30.0, min(30.0, (p.x - sun_x) * 0.055)) * sx
+                cxp = p.x * sx + off
+                cyp = GROUND_Y * sy + 6 * sy
+                rxp, ryp = half * sx, max(5.0, half * 0.16) * sy
+                bgd.ellipse([cxp - rxp, cyp - ryp, cxp + rxp, cyp + ryp],
+                            fill=(224, 222, 214))
+
             moving = []
             for s in strokes:
                 if s.anim is None:
-                    _draw_stroke_upto(bgd, s, s.length)
+                    draw_stroke_full(bg, s, draw=bgd)
                 else:
                     moving.append(s)
 
@@ -281,7 +336,7 @@ def run_story_pipeline(
             cam = [cw / 2.0, ch * 0.52, 1.0]   # cx, cy, zoom
             cam_kind = getattr(shot, "camera", "static") or "static"
             fade_frames = max(1, int(0.32 * fps))
-            white = Image.new("RGB", canvas, BACKGROUND)
+            white = get_paper(canvas)
 
             # ---- shot state: emotions & positions evolve over the timeline
             for f in range(shot_frames):
@@ -294,7 +349,7 @@ def run_story_pipeline(
                     key = id(s.anim)
                     if key not in transforms:
                         transforms[key] = _anim_offset(s.anim, tt)
-                    _draw_stroke_upto(d, s, s.length, transform=transforms[key])
+                    draw_stroke_full(frame, s, transform=transforms[key], draw=d)
 
                 # actor states at time tt: replay the timeline up to this frame
                 aids = list(tracks.keys())

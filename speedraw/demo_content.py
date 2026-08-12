@@ -22,9 +22,11 @@ GRAY = "#8b909a"    # cool gray
 BROWN = "#7b5233"   # walnut
 
 
-def _el(d: str, stroke: str = INK, width: int = 6, anim: str = "") -> str:
+def _el(d: str, stroke: str = INK, width: int = 6, anim: str = "",
+        fill: str = "") -> str:
     a = f' data-anim="{anim}"' if anim else ""
-    return f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{width}"{a}/>'
+    f = f' data-fill="{fill}"' if fill else ""
+    return f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{width}"{a}{f}/>'
 
 
 def _wavy_circle(cx: float, cy: float, r: float, bumps: int = 12, amp: float = 4) -> str:
@@ -232,7 +234,7 @@ def _svg(elements: List[str]) -> str:
 def _scene1() -> str:
     e: List[str] = []
     # sun: double ring, calm face, alternating rays
-    e.append(_el(_wavy_circle(225, 172, 84, bumps=10, amp=3), SUN, 8))
+    e.append(_el(_wavy_circle(225, 172, 84, bumps=10, amp=3), SUN, 8, fill=SUN))
     e.append(_el(_wavy_circle(225, 172, 66, bumps=9, amp=2), SUN, 3))
     e.append(_el("M 192,152 C 198,144 208,144 214,152", INK, 5))
     e.append(_el("M 238,152 C 244,144 254,144 260,152", INK, 5))
@@ -264,11 +266,11 @@ def _scene1() -> str:
                  BROWN, 7))
     e.append(_el("M 996,560 C 1002,546 1002,534 998,522 M 1022,554 C 1016,540 1018,526 1024,514 "
                  "M 1008,500 C 1012,488 1010,478 1006,468", BROWN, 3))
-    e.append(_el(_lobed(1014, 300, 118, 88, lobes=8, depth=0.18), GREEN, 7))
+    e.append(_el(_lobed(1014, 300, 118, 88, lobes=8, depth=0.18), GREEN, 7, fill=GREEN))
     e.append(_el(_lobed(942, 352, 52, 38, lobes=5, depth=0.2), GREEN, 4))
     e.append(_el(_lobed(1092, 348, 48, 36, lobes=5, depth=0.2), GREEN, 4))
     e.append(_el(_hatch(920, 342, 78, 42, 6), GREEN, 3))
-    e += [_el(_wavy_circle(x, y, 12, bumps=6, amp=1.1), RED, 4)
+    e += [_el(_wavy_circle(x, y, 12, bumps=6, amp=1.1), RED, 4, fill=RED)
           for x, y in ((968, 292), (1058, 272), (1022, 350))]
     e.append(_el(_shadow(1013, 610, 150, 6), GRAY, 3))
     # sprout in a soil mound, swaying, lit by a sunbeam
@@ -294,7 +296,7 @@ def _scene1() -> str:
 def _scene2() -> str:
     e: List[str] = []
     # central leaf: outline, veins, interior shading, dew drop
-    e.append(_el(_serrated_leaf(645, 355, 370, 168), GREEN, 7))
+    e.append(_el(_serrated_leaf(645, 355, 370, 168), GREEN, 7, fill=GREEN))
     e += _leaf_veins(645, 355, 370, 168)
     e.append(_el(_leaf_shading(645, 355, 370, 168, n=8), GREEN, 3))
     e.append(_el("M 728,300 C 738,316 742,330 734,340 C 722,346 710,338 710,324 "
@@ -308,7 +310,7 @@ def _scene2() -> str:
     e.append(_el("M 90,588 C 320,578 560,582 700,586 C 880,590 1050,584 1190,588", INK, 5))
     e.append(_el(_hatch(520, 592, 260, 9, 8), BROWN, 3))
     # sun + its arrow
-    e.append(_el(_wavy_circle(192, 145, 60, bumps=9, amp=2.6), SUN, 7))
+    e.append(_el(_wavy_circle(192, 145, 60, bumps=9, amp=2.6), SUN, 7, fill=SUN))
     e.append(_el(_wavy_circle(192, 145, 46, bumps=8, amp=1.8), SUN, 3))
     e += _rays(192, 145, 74, 112, 10, SUN, 4, phase=0.2, anim="spin:15")
     e += _arrow(282, 222, 516, 298, SUN, 6, bend=36)
@@ -336,7 +338,7 @@ def _scene2() -> str:
 def _scene3() -> str:
     e: List[str] = []
     # leaf-factory: tilted leaf, veins, porthole window, chimney
-    e.append(_el(_serrated_leaf(330, 395, 310, 145, tilt_deg=-14), GREEN, 7))
+    e.append(_el(_serrated_leaf(330, 395, 310, 145, tilt_deg=-14), GREEN, 7, fill=GREEN))
     e += _leaf_veins(330, 395, 310, 145, tilt_deg=-14, n=5)
     e.append(_el(_leaf_shading(330, 395, 310, 145, tilt_deg=-14, n=6), GREEN, 3))
     e.append(_el(_wavy_circle(296, 372, 34, bumps=7, amp=1.4), INK, 4))
@@ -354,7 +356,7 @@ def _scene3() -> str:
     # sugar: faceted crystal with interior shading and pulsing sparkles
     hexpts = [(760 + 74 * math.cos(math.radians(60 * i - 30)),
                390 + 74 * math.sin(math.radians(60 * i - 30))) for i in range(6)]
-    e.append(_el("M " + " L ".join(f"{x:.0f},{y:.0f}" for x, y in hexpts) + " Z", RED, 7))
+    e.append(_el("M " + " L ".join(f"{x:.0f},{y:.0f}" for x, y in hexpts) + " Z", RED, 7, fill=RED))
     e.append(_el(" ".join(f"M 760,390 L {x:.0f},{y:.0f}" for x, y in hexpts[::2]), RED, 4))
     e.append(_el(_hatch(712, 404, 44, 38, 5), RED, 3))
     e.append(_el(_shadow(760, 486, 120, 5), GRAY, 3))

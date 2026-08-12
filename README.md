@@ -72,11 +72,15 @@ it out:
   Actors can also **run** — a faster, leaning stride for urgency and chases.
 - **Dialogue** is spoken with a distinct neural voice per character
   (male/female, language follows `--voice`) and a hand-drawn speech bubble
-  that pops in above the speaker. The mouth is **lip-synced to the actual
-  audio**: a per-frame RMS envelope drives how far it opens (lips close in
-  the silences between words), and the zero-crossing rate picks the shape —
-  round open vowels vs. wide flat consonants, with a dark mouth interior
-  when wide open.
+  that pops in above the speaker. Delivery is **emotion-aware**: sad lines
+  play slower and lower, excited lines faster and higher. The mouth is
+  **lip-synced to the actual audio**: a per-frame RMS envelope drives how
+  far it opens, edge-tts word boundaries force the lips shut between words,
+  and the zero-crossing rate picks the shape — round open vowels vs. wide
+  flat consonants, with a dark mouth interior when wide open.
+- **Characters are doodle people**, not bare stick figures: shirt-coloured
+  torsos, four hair styles (spiky, curly, flat, bun), skin-tone hands,
+  shoes, and a soft ground shadow that shrinks when they jump.
 - **The world moves too**: the same prop library used by explainer mode
   (sun, clouds, trees, houses, cars with spinning wheels, balloons,
   kites, rain, birds...) with motions — a balloon can drift away mid-story,
@@ -98,7 +102,7 @@ it out:
 | `-o, --output` | `explainer.mp4` | Output MP4 path |
 | `--scenes N` | `4` | Number of scenes (1–12) |
 | `--model` | `claude-opus-5` | Claude model used for script + visuals |
-| `--tts {auto,edge,espeak,none}` | `auto` | Voiceover engine: `edge` = neural voices, `espeak` = offline, `none` = silent; `auto` tries edge then falls back |
+| `--tts {auto,edge,piper,espeak,none}` | `auto` | Voiceover engine: `edge` = neural voices (emotion-aware), `piper` = offline neural (model auto-downloads once), `espeak` = offline basic, `none` = silent; `auto` = edge→piper→espeak chain |
 | `--voice` | English | Language code (`en`, `tr`, `de`, ...) or a full Edge voice name (`en-US-AriaNeural`) |
 | `--size WxH` | `1280x720` | Video resolution |
 | `--fps` | `30` | Frame rate |
@@ -127,6 +131,13 @@ topic ──► script_gen.py ──► VideoScript {title, scenes[{label, narra
 
 Design notes:
 
+- **Scribble-fill.** Closed shapes tagged `data-fill="#hex"` are coloured in
+  with a marker-scribble tint (light base + wobbly diagonal strokes, soft
+  bleed at the edges) the moment their outline completes — drawings look
+  coloured-in, not just traced. Claude is prompted to fill major shapes.
+- **Paper feel.** Every frame sits on a procedurally generated paper
+  background (fiber grain + soft vignette), and strokes taper at both ends
+  like a real marker nib.
 - **Motion system.** Any SVG element can carry a `data-anim` attribute —
   `float`, `drift:dx,dy[,wrap]`, `spin[:period]`, `sway[:deg]`, `pulse[:amp]` —
   and starts moving the moment the scene's drawing completes. A custom

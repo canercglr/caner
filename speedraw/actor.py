@@ -48,10 +48,37 @@ _POSTURE = {
 }
 
 
+SKIN = (243, 205, 171)
+SHOE = (58, 62, 74)
+PANTS = (76, 84, 102)
+SHADOW = (224, 222, 214)
+
+
 @dataclass
 class ActorVisual:
-    color: Tuple[int, int, int]
+    color: Tuple[int, int, int]                 # outline / limb ink
     scale: float
+    shirt: Optional[Tuple[int, int, int]] = None
+    hair: str = "spiky"                          # spiky | curly | flat | bun
+    hair_color: Tuple[int, int, int] = (64, 50, 42)
+
+
+def _capsule(d: ImageDraw.ImageDraw, a: Point, b: Point, r: float, fill,
+             outline=None, ow: float = 0) -> None:
+    def solid(radius, color):
+        ax, ay = a
+        bx, by = b
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / L * radius, dx / L * radius
+        d.polygon([(ax + nx, ay + ny), (bx + nx, by + ny),
+                   (bx - nx, by - ny), (ax - nx, ay - ny)], fill=color)
+        d.ellipse([ax - radius, ay - radius, ax + radius, ay + radius], fill=color)
+        d.ellipse([bx - radius, by - radius, bx + radius, by + radius], fill=color)
+
+    if outline and ow:
+        solid(r + ow, outline)
+    solid(r, fill)
 
 
 def _cir(d: ImageDraw.ImageDraw, c: Point, r: float, color, width: int) -> None:
@@ -260,12 +287,44 @@ def draw_actor(
         arms = [limb(shoulder, A1, A2, arm_base, 0.12, -1.0),
                 limb(shoulder, A1, A2, arm_base, 0.12)]
 
-    # ---- draw body --------------------------------------------------------
-    _line(d, [(head_c[0] - bvx * head_r, head_c[1] - bvy * head_r), shoulder], color, W)
-    _line(d, [shoulder, hip], color, W)
-    for limb_pts in arms + legs:
-        _line(d, limb_pts, color, W)
+    # ---- draw the doodle body ---------------------------------------------
+    # ground shadow (shrinks when airborne)
+    shrink = max(0.5, 1.0 - abs(jump_dy) / (130 * s))
+    rx, ry = 50 * s * shrink, 8.5 * s * shrink
+    d.ellipse([x - rx, ground_y + 5 * s - ry, x + rx, ground_y + 5 * s + ry],
+              fill=SHADOW)
+
+    # legs in trousers + shoes
+    for limb_pts in legs:
+        _line(d, limb_pts, PANTS, W + round(3 * s))
+        fx_, fy_ = limb_pts[-1]
+        # shoe: small ellipse nudged toward the walking direction
+        d.ellipse([fx_ - 9 * s + facing * 5 * s, fy_ - 6 * s,
+                   fx_ + 12 * s + facing * 5 * s, fy_ + 6 * s], fill=SHOE)
+
+    # torso: shirt-coloured bean from below the neck to the hip
+    shirt = vis.shirt or color
+    t0 = (shoulder[0] + bvx * 9 * s, shoulder[1] + bvy * 9 * s)
+    _capsule(d, t0, hip, 17.5 * s, shirt, color, max(2, round(2.6 * s)))
+    # a couple of crease strokes keep it doodly
+    _line(d, [(hip[0] - 8 * s, hip[1] - 16 * s), (hip[0] + 2 * s, hip[1] - 12 * s)],
+          _mix_c(shirt, (0, 0, 0), 0.25), max(2, round(2 * s)))
+
+    # arms: darker sleeves so they read against the shirt, skin hands
+    sleeve = _mix_c(shirt, (0, 0, 0), 0.32)
+    for limb_pts in arms:
+        _line(d, limb_pts, sleeve, W + round(1 * s))
+        hx_, hy_ = limb_pts[-1]
+        d.ellipse([hx_ - 6.5 * s, hy_ - 6.5 * s, hx_ + 6.5 * s, hy_ + 6.5 * s],
+                  fill=SKIN, outline=color, width=max(2, round(1.8 * s)))
+
+    # neck + head (skin-filled) + hair
+    _line(d, [(head_c[0] - bvx * head_r, head_c[1] - bvy * head_r), shoulder],
+          color, W)
+    d.ellipse([head_c[0] - head_r, head_c[1] - head_r,
+               head_c[0] + head_r, head_c[1] + head_r], fill=SKIN)
     _cir(d, head_c, head_r, color, W)
+    _draw_hair(d, head_c, head_r, facing, vis.hair, vis.hair_color, s)
 
     for ex in extras:
         if ex[0] == "line":
@@ -281,6 +340,47 @@ def draw_actor(
                mouth=mouth)
     _draw_badge(d, (head_c[0], head_c[1] - head_r), emotion, t, s)
     return (head_c[0], head_c[1] - head_r)
+
+
+def _mix_c(a: Tuple[int, int, int], b: Tuple[int, int, int], t: float) -> Tuple[int, int, int]:
+    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))  # type: ignore[return-value]
+
+
+def _draw_hair(d: ImageDraw.ImageDraw, head_c: Point, head_r: float,
+               facing: float, style: str, hair_color, s: float) -> None:
+    hx, hy = head_c
+    ow = max(2, round(2.2 * s))
+    if style == "curly":
+        for i in range(6):
+            a = math.pi + (i + 0.5) * math.pi / 6   # across the top arc
+            cx = hx + (head_r * 0.95) * math.cos(a)
+            cy = hy + (head_r * 0.95) * math.sin(a)
+            r = (7.5 - abs(i - 2.5)) * s + 3 * s
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=hair_color)
+    elif style == "flat":
+        d.chord([hx - head_r, hy - head_r, hx + head_r, hy + head_r],
+                195, 345, fill=hair_color)
+        for i in range(3):
+            x0 = hx - head_r * 0.5 + i * head_r * 0.42
+            d.line([(x0, hy - head_r * 0.55), (x0 + facing * 5 * s, hy - head_r * 0.9)],
+                   fill=_mix_c(hair_color, (0, 0, 0), 0.3), width=ow)
+    elif style == "bun":
+        d.chord([hx - head_r, hy - head_r, hx + head_r, hy + head_r],
+                190, 350, fill=hair_color)
+        bx = hx - facing * head_r * 0.75
+        by = hy - head_r * 0.95
+        r = 10 * s
+        d.ellipse([bx - r, by - r, bx + r, by + r], fill=hair_color)
+    else:  # spiky
+        for i in range(5):
+            a = math.pi + (i + 0.7) * math.pi / 6.2
+            bx = hx + head_r * 0.92 * math.cos(a)
+            by = hy + head_r * 0.92 * math.sin(a)
+            tipx = hx + head_r * 1.45 * math.cos(a) + facing * 3 * s
+            tipy = hy + head_r * 1.45 * math.sin(a)
+            wx, wy = -math.sin(a) * 7 * s, math.cos(a) * 7 * s
+            d.polygon([(bx - wx, by - wy), (tipx, tipy), (bx + wx, by + wy)],
+                      fill=hair_color)
 
 
 def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s,

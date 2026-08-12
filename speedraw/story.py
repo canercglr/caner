@@ -13,7 +13,9 @@ Gesture = Literal["wave", "jump", "point_left", "point_right", "dance", "nod",
                   "laugh", "cheer", "sit"]
 PropKind = Literal["sun", "moon", "star", "cloud", "rain", "tree", "bush",
                    "mountain", "flower", "grass", "rock", "house", "bench",
-                   "car", "ball", "balloon", "bird", "kite"]
+                   "car", "ball", "balloon", "bird", "kite", "cat", "dog",
+                   "butterfly", "bicycle", "campfire", "streetlamp", "fence",
+                   "boat"]
 Motion = Literal["none", "drift_left", "drift_right", "rise", "fall_loop",
                  "bounce", "spin", "sway", "float", "pulse"]
 Camera = Literal["static", "slow_zoom_in", "slow_zoom_out", "pan_left",
@@ -25,6 +27,9 @@ class StoryActor(BaseModel):
     name: str
     color: Literal["ink", "blue", "red", "green"] = "ink"
     voice: Literal["female", "male"] = "female"
+    hair: Optional[Literal["spiky", "curly", "flat", "bun"]] = Field(
+        default=None, description="hairstyle; defaults by voice if omitted"
+    )
     start_x: float = Field(
         description="initial x position (0-1280); use <0 or >1280 to start "
                     "off-screen and walk in later"
@@ -109,9 +114,12 @@ Craft rules:
 - Events run one at a time, in order. Keep 4-9 per shot.
 - Dress each shot with 3-7 props, and give 1-3 of them motion so the world
   feels alive: clouds drift, a balloon rises, a ball bounces, rain falls,
-  car wheels spin, flowers sway. Motion should serve the story (if the story
-  is about a balloon flying away, the balloon gets motion "rise" in that
-  shot).
+  car and bicycle wheels spin, flowers sway, a butterfly floats, a campfire
+  flickers, cat and dog tails wag on their own. Motion should serve the
+  story (if the story is about a balloon flying away, the balloon gets
+  motion "rise" in that shot). Pets (cat, dog), vehicles (car, bicycle,
+  boat), places (house, fence, streetlamp, bench, campfire, mountain) let
+  you stage richer worlds — use props that match the setting.
 - The ground line is at y=585. Actors are ~200px tall. Keep the sky area
   (y < 300) for sun/moon/clouds/stars and don't crowd the center where
   actors act.
@@ -162,6 +170,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="tree", x=1080, y=585, scale=1.0, motion="none"),
                 StoryProp(kind="balloon", x=620, y=585, scale=1.0, motion="none"),
                 StoryProp(kind="flower", x=350, y=585, scale=1.2, motion="sway"),
+                StoryProp(kind="butterfly", x=900, y=360, scale=1.1, motion="float"),
             ],
             camera="slow_zoom_in",
             events=[
@@ -204,6 +213,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="kite", x=640, y=585, scale=1.1, motion="float"),
                 StoryProp(kind="bird", x=1000, y=170, scale=0.8, motion="drift_left"),
                 StoryProp(kind="flower", x=350, y=585, scale=1.2, motion="sway"),
+                StoryProp(kind="dog", x=1180, y=585, scale=1.0),
             ],
             camera="slow_zoom_out",
             events=[

@@ -7,7 +7,7 @@ from typing import Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .animator import BACKGROUND
+from .paper import get_paper
 
 _TITLE_FONTS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
@@ -117,7 +117,7 @@ def render_title_frames(
 
     idx = start_index
     for f in range(total_frames):
-        frame = Image.new("RGB", canvas, BACKGROUND)
+        frame = get_paper(canvas).copy()
         if f < wipe_frames:
             reveal_x = x0 + int((x1 - x0) * (f + 1) / wipe_frames)
             mask = Image.new("L", canvas, 0)
