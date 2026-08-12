@@ -71,15 +71,18 @@ EDGE_DEFAULT_VOICES = {
     "hi": "hi-IN-SwaraNeural",
 }
 
-# how each emotion colours the delivery: (rate %, pitch Hz)
+# how each emotion colours the delivery: (rate %, pitch Hz).
+# Emotion lives mostly in tempo: pitch shifts are kept within ~±8 Hz,
+# because larger swings change the voice's identity — the same character
+# would sound like a different person between a sad and an excited line.
 EDGE_EMOTION = {
-    "happy": (8, 14),
-    "excited": (16, 28),
-    "sad": (-16, -22),
-    "angry": (8, -12),
-    "scared": (14, 22),
-    "surprised": (6, 18),
-    "love": (-6, 8),
+    "happy": (8, 5),
+    "excited": (16, 8),
+    "sad": (-14, -6),
+    "angry": (8, -5),
+    "scared": (12, 6),
+    "surprised": (6, 6),
+    "love": (-6, 3),
     "neutral": (0, 0),
 }
 
@@ -269,6 +272,51 @@ def _synth_espeak(text: str, out_wav: Path, voice: str | None, speed_wpm: int) -
 # ---------------------------------------------------------------------------
 
 
+# Engine the auto chain locked onto for this run. Once a line has been
+# spoken by one engine, every later line must use the same engine — a
+# mid-video fallback would change the character's voice entirely.
+_AUTO_ENGINE: Optional[str] = None
+
+
+def _synth_auto(text: str, out_wav: Path, voice: str | None, speed_wpm: int,
+                emotion: Optional[str], words_out: Optional[Path]) -> float:
+    global _AUTO_ENGINE
+    import time
+
+    def attempt(eng: str) -> float:
+        if eng == "edge":
+            return _synth_edge(text, out_wav, voice, emotion, words_out)
+        if eng == "piper":
+            return _synth_piper(text, out_wav, voice, emotion)
+        return _synth_espeak(text, out_wav, voice, speed_wpm)
+
+    order = ["edge", "piper", "espeak"]
+    if _AUTO_ENGINE in order:
+        # locked in: retry the chosen engine hard before ever switching,
+        # so a transient network hiccup doesn't swap the voice mid-story
+        for attempt_i in range(3):
+            try:
+                return attempt(_AUTO_ENGINE)
+            except VoiceoverError as exc:
+                err = exc
+                time.sleep(1.5 * (attempt_i + 1))
+        _log(f"{_AUTO_ENGINE} kept failing ({err}); switching engines "
+             "(voice will change)")
+        order = [e for e in order if e != _AUTO_ENGINE]
+
+    for eng in order:
+        try:
+            dur = attempt(eng)
+            _AUTO_ENGINE = eng
+            return dur
+        except VoiceoverError as exc:
+            _log(f"{eng} unavailable ({exc}); trying next engine")
+    _log("no TTS engine available; using a silent track")
+    dur = estimate_speech_seconds(text)
+    _write_silence(out_wav, dur)
+    return dur
+
+
 def synthesize(
     text: str,
     out_wav: Path,
@@ -294,21 +342,7 @@ def synthesize(
     if engine == "espeak":
         return _synth_espeak(text, out_wav, voice, speed_wpm)
     if engine == "auto":
-        try:
-            return _synth_edge(text, out_wav, voice, emotion, words_out)
-        except VoiceoverError as exc:
-            _log(f"edge-tts unavailable ({exc}); trying Piper")
-        try:
-            return _synth_piper(text, out_wav, voice, emotion)
-        except VoiceoverError as exc:
-            _log(f"Piper unavailable ({exc}); falling back to espeak-ng")
-        try:
-            return _synth_espeak(text, out_wav, voice, speed_wpm)
-        except VoiceoverError as exc:
-            _log(f"espeak-ng unavailable ({exc}); using a silent track")
-        dur = estimate_speech_seconds(text)
-        _write_silence(out_wav, dur)
-        return dur
+        return _synth_auto(text, out_wav, voice, speed_wpm, emotion, words_out)
     raise VoiceoverError(
         f"Unknown TTS engine: {engine!r} "
         "(use 'auto', 'edge', 'piper', 'espeak' or 'none')"
