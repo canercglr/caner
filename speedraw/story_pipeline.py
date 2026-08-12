@@ -18,9 +18,11 @@ from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw
 
-from .actor import ActorVisual, draw_actor, draw_speech_bubble
+from .actor import ActorVisual, body_stretch, draw_actor, draw_speech_bubble
 from .animator import (SceneAnimator, _anim_offset, draw_stroke_full,
                        parse_svg_strokes)
+from .atmosphere import (SHADOW_STRETCH, add_light_glows, apply_sky_wash,
+                         grade_frame)
 from .paper import get_paper
 from .assembler import build_video
 from .pipeline import DEFAULT_MODEL, log
@@ -129,9 +131,45 @@ def _mouth_track(wav_path: Path, fps: int,
                 i1 = min(o.size, int(sp["end"] * fps) + 1)
                 in_word[i0:i1] = True
             o = np.where(in_word, o, np.minimum(o, 0.06))
+            _apply_visemes(o, z, spans, fps)
         except Exception:
             pass
     return list(zip(o.tolist(), z.tolist()))
+
+
+def _apply_visemes(o, z, spans, fps) -> None:
+    """Letter-level mouth articulation inside each spoken word.
+
+    Each word's frames are mapped onto its letters; the current letter's
+    class then shapes the mouth on top of the audio envelope: bilabials
+    (m/b/p) shut the lips, round vowels (o/u/ö/ü) narrow and round the
+    mouth, wide vowels (e/i) flatten it, open vowels (a) drop the jaw,
+    and f/v nearly close it. Mutates o and z in place.
+    """
+    for sp in spans:
+        letters = [c for c in str(sp.get("text", "")).lower() if c.isalpha()]
+        if not letters:
+            continue
+        i0 = max(0, int(sp["start"] * fps))
+        i1 = min(o.size, int(sp["end"] * fps) + 1)
+        n = max(1, i1 - i0)
+        for fi in range(i0, i1):
+            pos = (fi - i0) / n
+            ch = letters[min(len(letters) - 1, int(pos * len(letters)))]
+            if ch in "mbp":
+                o[fi] *= 0.12
+            elif ch in "fv":
+                o[fi] = min(o[fi], 0.14)
+                z[fi] = max(z[fi], 0.7)
+            elif ch in "ouöüw":
+                z[fi] = min(z[fi], 0.22)
+                o[fi] = min(1.0, o[fi] * 1.12)
+            elif ch in "ie":
+                z[fi] = max(z[fi], 0.78)
+                o[fi] *= 0.85
+            elif ch in "aâ":
+                o[fi] = min(1.0, o[fi] * 1.2)
+                z[fi] = min(z[fi], 0.45)
 
 
 @dataclass
@@ -306,21 +344,27 @@ def run_story_pipeline(
             svg = ('<svg viewBox="0 0 1280 720">' + gline + "".join(svg_parts)
                    + "</svg>")
             strokes = parse_svg_strokes(svg, canvas)
+            mood = getattr(shot, "mood", "day") or "day"
             bg = get_paper(canvas).copy()
+            apply_sky_wash(bg, mood)
             bgd = ImageDraw.Draw(bg)
 
-            # soft ground shadows, offset away from the sun
+            # soft ground shadows, offset away from the sun and stretched
+            # by low light (long golden-hour shadows, none under overcast)
             from .props import PROP_SHADOW_W
 
-            sun_x = next((p.x for p in shot.props if p.kind == "sun"), 640.0)
+            sh_k = SHADOW_STRETCH.get(mood, 1.0)
+            sun_x = next((p.x for p in shot.props
+                          if p.kind in ("sun", "moon", "streetlamp")), 640.0)
             for p in shot.props:
                 half = PROP_SHADOW_W.get(p.kind, 0) * p.scale
-                if half <= 0:
+                if half <= 0 or sh_k <= 0:
                     continue
-                off = max(-30.0, min(30.0, (p.x - sun_x) * 0.055)) * sx
+                off = max(-30.0, min(30.0, (p.x - sun_x) * 0.055)) * sx * sh_k
                 cxp = p.x * sx + off
                 cyp = GROUND_Y * sy + 6 * sy
-                rxp, ryp = half * sx, max(5.0, half * 0.16) * sy
+                rxp = half * sx * (1.0 + 0.35 * (sh_k - 1.0))
+                ryp = max(5.0, half * 0.16) * sy
                 bgd.ellipse([cxp - rxp, cyp - ryp, cxp + rxp, cyp + ryp],
                             fill=(224, 222, 214))
 
@@ -330,6 +374,7 @@ def run_story_pipeline(
                     draw_stroke_full(bg, s, draw=bgd)
                 else:
                     moving.append(s)
+            add_light_glows(bg, shot.props, mood, sx, sy)
 
             # ---- camera state for this shot ------------------------------
             cw, ch = canvas
@@ -337,6 +382,16 @@ def run_story_pipeline(
             cam_kind = getattr(shot, "camera", "static") or "static"
             fade_frames = max(1, int(0.32 * fps))
             white = get_paper(canvas)
+
+            # follow-through bookkeeping: per-actor movement end times (for
+            # the damped stop-settle lean) and frame-to-frame velocity
+            move_ends: Dict[str, List[Tuple[float, float]]] = {a: [] for a in tracks}
+            for te in timed:
+                if te.ev.action in ("walk", "run") and abs(te.x1 - te.x0) > 8:
+                    amp = 0.20 if te.ev.action == "run" else 0.12
+                    move_ends[te.ev.actor].append((te.start + te.dur, amp))
+            prev_xs = dict(start_x)
+            vels = {a: 0.0 for a in tracks}
 
             # ---- shot state: emotions & positions evolve over the timeline
             for f in range(shot_frames):
@@ -372,6 +427,7 @@ def run_story_pipeline(
                             st["x"] = te.x1
                         else:
                             k = (tt - te.start) / te.dur
+                            k = k * k * (3 - 2 * k)   # ease in/out of the walk
                             st["x"] = te.x0 + (te.x1 - te.x0) * k
                         if abs(te.x1 - te.x0) > 8:
                             st["facing"] = 1.0 if te.x1 > te.x0 else -1.0
@@ -401,13 +457,56 @@ def run_story_pipeline(
                         dx = states[other]["x"] - st["x"]
                         if abs(dx) > 60:
                             st["facing"] = 1.0 if dx > 0 else -1.0
+
+                    # smoothed horizontal velocity (drives hair follow-through)
+                    vx = (st["x"] - prev_xs[aid]) * fps
+                    vels[aid] = vels[aid] * 0.65 + vx * 0.35
+                    prev_xs[aid] = st["x"]
+
+                    # damped lean settle after a walk/run stops
+                    settle = 0.0
+                    if st["activity"] not in ("walk", "run"):
+                        past = [(end, amp) for end, amp in move_ends[aid]
+                                if 0.0 <= tt - end < 0.8]
+                        if past:
+                            end, amp = max(past)
+                            u = tt - end
+                            settle = amp * math.exp(-4.5 * u) * math.cos(
+                                2 * math.pi * 1.9 * u)
+
+                    # gaze: look at the scene partner, or ahead while moving
+                    if st["activity"] in ("walk", "run"):
+                        gaze = st["facing"] * 0.5
+                    elif len(aids) > 1:
+                        other = next(a for a in aids if a != aid)
+                        dxo = states[other]["x"] - st["x"]
+                        gaze = max(-1.0, min(1.0, dxo / 500.0))
+                    else:
+                        gaze = st["facing"] * 0.35
+
+                    layer = Image.new("RGBA", canvas, (0, 0, 0, 0))
+                    ld = ImageDraw.Draw(layer)
                     anchor = draw_actor(
-                        d, st["x"], ground, tracks[aid].visual,
+                        ld, st["x"], ground, tracks[aid].visual,
                         facing=st["facing"], emotion=st["emotion"], t=tt,
                         activity=st["activity"], act_t=st["act_t"],
                         act_dur=st["act_dur"], talking=st["talking"],
-                        mouth=st["mouth"],
+                        mouth=st["mouth"], vel=vels[aid], settle=settle,
+                        gaze=gaze,
+                        blink_seed=(hash(aid) % 97) / 13.0,
                     )
+                    # squash & stretch about the ground contact point
+                    sxf, syf = body_stretch(st["activity"], st["act_t"],
+                                            st["act_dur"])
+                    if abs(sxf - 1.0) > 0.004 or abs(syf - 1.0) > 0.004:
+                        layer = layer.transform(
+                            layer.size, Image.AFFINE,
+                            (1 / sxf, 0, st["x"] * (1 - 1 / sxf),
+                             0, 1 / syf, ground * (1 - 1 / syf)),
+                            resample=Image.BILINEAR)
+                        anchor = (st["x"] + (anchor[0] - st["x"]) * sxf,
+                                  ground + (anchor[1] - ground) * syf)
+                    frame.paste(layer, (0, 0), layer)
                     if st["bubble"]:
                         bubbles.append((anchor, st["bubble"]))
 
@@ -445,6 +544,8 @@ def run_story_pipeline(
                     y0 = min(max(cam[1] - h2 / 2, 0), ch - h2)
                     frame = frame.crop((int(x0), int(y0), int(x0 + w2),
                                         int(y0 + h2))).resize(canvas, Image.BICUBIC)
+
+                frame = grade_frame(frame, mood)
 
                 # ---- shot transition: fade through the whiteboard --------
                 if si > 1 and f < fade_frames:

@@ -81,6 +81,28 @@ it out:
 - **Characters are doodle people**, not bare stick figures: shirt-coloured
   torsos, four hair styles (spiky, curly, flat, bun), skin-tone hands,
   shoes, and a soft ground shadow that shrinks when they jump.
+- **Classic animation principles** drive the movement. Jumps have
+  anticipation (a crouch and arm wind-up), airborne stretch and a landing
+  squash with bent knees — all **squash & stretch** is volume-preserving
+  about the ground contact point, and walk/run strides squash subtly on
+  each footfall. Walks **ease in and out** instead of starting at full
+  speed, gestures snap into place with a damped overshoot, and when a
+  character stops moving their body keeps going for a beat — a
+  **follow-through** lean that settles like a spring. Hair drags behind
+  motion (trailing spikes, swinging bun) and keeps swaying gently at rest.
+- **Faces act too**: every emotion has matching **eyebrows** (high arcs of
+  surprise, knitted anger, worried inner tilt), pupils **look at** the
+  scene partner or where the character is walking, blinks are desynced per
+  character, and while talking the mouth corners stay curled with the
+  emotion — characters smile or droop *through* their dialogue.
+- **Letter-level visemes**: on top of the loudness envelope, each word's
+  letters shape the mouth — lips shut on m/b/p, nearly close on f/v,
+  round on o/u/ö/ü, widen on e/i, and drop open on a.
+- **Atmosphere**: every shot has a mood — `day`, `golden_hour`, `sunset`,
+  `night`, `overcast` — painted as a watercolor sky wash on the paper, a
+  per-frame color grade (warm gold, dusky blue, muted gray...), longer
+  shadows in low sun, and glowing halos around streetlamps and campfires
+  after dark. Claude matches the mood to the story's emotional arc.
 - **The world moves too**: the same prop library used by explainer mode
   (sun, clouds, trees, houses, cars with spinning wheels, balloons,
   kites, rain, birds...) with motions — a balloon can drift away mid-story,

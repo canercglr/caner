@@ -20,6 +20,7 @@ Motion = Literal["none", "drift_left", "drift_right", "rise", "fall_loop",
                  "bounce", "spin", "sway", "float", "pulse"]
 Camera = Literal["static", "slow_zoom_in", "slow_zoom_out", "pan_left",
                  "pan_right", "focus_speaker"]
+Mood = Literal["day", "golden_hour", "sunset", "night", "overcast"]
 
 
 class StoryActor(BaseModel):
@@ -71,6 +72,10 @@ class StoryShot(BaseModel):
     camera: Camera = Field(
         default="static",
         description="camera move for the whole shot",
+    )
+    mood: Mood = Field(
+        default="day",
+        description="lighting/color atmosphere of the shot",
     )
 
 
@@ -125,6 +130,13 @@ Craft rules:
   actors act.
 - Shots reuse the same world: keep prop continuity where it makes sense,
   and remember actor positions carry over between shots.
+- Give each shot a mood — the lighting and color atmosphere: "day" is
+  neutral; "golden_hour" is warm late-afternoon light (great for happy
+  endings); "sunset" is dramatic orange-pink; "night" is dark blue (put a
+  moon and stars in the sky, and streetlamps or a campfire glow in the
+  dark); "overcast" is gray and muted (perfect for sad or tense beats).
+  Let the mood follow the emotional arc — e.g. overcast while things go
+  wrong, golden_hour when they're resolved.
 - Give each shot a camera move: "focus_speaker" is best for dialogue-heavy
   shots (the camera glides to whoever is talking); "slow_zoom_in" builds
   tension or intimacy; "slow_zoom_out" reveals the scene or ends the story
@@ -173,6 +185,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="butterfly", x=900, y=360, scale=1.1, motion="float"),
             ],
             camera="slow_zoom_in",
+            mood="day",
             events=[
                 StoryEvent(actor="pip", action="walk", to_x=430),
                 StoryEvent(actor="pip", action="say", text="What a perfect day for my balloon!",
@@ -190,6 +203,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="bird", x=300, y=200, scale=1.0, motion="drift_right"),
             ],
             camera="focus_speaker",
+            mood="overcast",
             events=[
                 StoryEvent(actor="pip", action="emote", emotion="surprised"),
                 StoryEvent(actor="pip", action="say", text="Oh no! Come back!", emotion="surprised"),
@@ -216,6 +230,7 @@ DEMO_STORY = Story(
                 StoryProp(kind="dog", x=1180, y=585, scale=1.0),
             ],
             camera="slow_zoom_out",
+            mood="golden_hour",
             events=[
                 StoryEvent(actor="momo", action="run", to_x=820),
                 StoryEvent(actor="momo", action="say", text="Ta-da! Look what I brought!",

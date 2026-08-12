@@ -24,15 +24,64 @@ GESTURES = ("wave", "jump", "point_left", "point_right", "dance", "nod",
             "laugh", "cheer", "sit")
 
 
-def _ease(act_t: float, act_dur: float, ramp: float = 0.35) -> float:
-    """0->1->0 envelope: ease in, hold, ease out over the activity."""
+def _smooth(k: float) -> float:
+    k = max(0.0, min(1.0, k))
+    return k * k * (3 - 2 * k)
+
+
+def _ease(act_t: float, act_dur: float, ramp: float = 0.35,
+          overshoot: float = 0.12) -> float:
+    """0->1->0 envelope: smooth ease in, overshoot-settle hold, ease out.
+
+    The hold phase starts with a small damped oscillation past 1.0 so poses
+    snap into place with follow-through instead of stopping dead.
+    """
     if act_dur <= 2 * ramp:
         return math.sin(math.pi * min(1.0, act_t / max(act_dur, 1e-3)))
     if act_t < ramp:
-        return act_t / ramp
+        return _smooth(act_t / ramp)
     if act_t > act_dur - ramp:
-        return max(0.0, (act_dur - act_t) / ramp)
+        return _smooth(max(0.0, (act_dur - act_t) / ramp))
+    if overshoot:
+        dt = act_t - ramp
+        return 1.0 + overshoot * math.exp(-4.0 * dt) * math.sin(2 * math.pi * 1.5 * dt)
     return 1.0
+
+
+def _jump_phases(act_t: float, s: float) -> Tuple[float, float, float]:
+    """Anticipation -> flight -> landing. Returns (jump_dy, hip_crouch, sy).
+
+    sy is the vertical body-stretch factor: squash while crouching and on
+    landing, stretch while moving fast through the air.
+    """
+    if act_t < 0.16:
+        k = _smooth(act_t / 0.16)
+        return 0.0, 16 * s * k, 1.0 - 0.10 * k
+    if act_t < 0.86:
+        u = (act_t - 0.16) / 0.70
+        return (-76 * s * math.sin(math.pi * u), 0.0,
+                1.0 + 0.11 * abs(math.cos(math.pi * u)))
+    v = min(1.0, (act_t - 0.86) / 0.24)
+    return 0.0, 0.0, 1.0 - 0.16 * math.sin(math.pi * v)
+
+
+def body_stretch(activity: str, act_t: float, act_dur: float) -> Tuple[float, float]:
+    """(sx, sy) squash & stretch factors about the ground anchor.
+
+    Volume-preserving: sx = 1/sy, so squashing down widens the body.
+    """
+    sy = 1.0
+    if activity == "jump":
+        sy = _jump_phases(act_t, 1.0)[2]
+    elif activity == "walk":
+        sy = 1.0 + 0.028 - 0.05 * abs(math.cos(2 * math.pi * 1.8 * act_t))
+    elif activity == "run":
+        sy = 1.0 + 0.04 - 0.08 * abs(math.cos(2 * math.pi * 2.6 * act_t))
+    elif activity == "cheer":
+        sy = 1.0 + 0.05 * abs(math.sin(2 * math.pi * 2.2 * act_t))
+    elif activity == "dance":
+        sy = 1.0 + 0.035 * math.sin(2 * math.pi * 1.62 * act_t)
+    return (1.0 / sy, sy)
 
 # posture per emotion: (head_dy, lean, arm_base) — arm_base is the resting
 # arm angle from straight down (positive = away from body)
@@ -109,6 +158,10 @@ def draw_actor(
     act_dur: float = 1.5,       # planned duration of the activity
     talking: bool = False,
     mouth: Optional[Tuple[float, float]] = None,  # lip-sync (open, shape) 0-1
+    vel: float = 0.0,           # horizontal velocity px/s (drives hair lag)
+    settle: float = 0.0,        # damped follow-through lean after stopping
+    gaze: Optional[float] = None,   # -1..1 world-space look direction
+    blink_seed: float = 0.0,    # desyncs blink timing between actors
 ) -> Point:
     """Draw the actor; returns the head-top anchor (for badges/bubbles)."""
     s = vis.scale
@@ -122,13 +175,13 @@ def draw_actor(
     bob = 2.2 * s * math.sin(2 * math.pi * t / 2.8)
     jump_dy = 0.0
     hip_drop = 0.0
-    body_lean = lean            # forward lean in rad (positive = toward facing)
+    body_lean = lean + settle   # forward lean in rad (positive = toward facing)
     w = 2 * math.pi * 1.8 * act_t
     wr = 2 * math.pi * 2.6 * act_t
 
     if activity == "jump":
-        ph = min(1.0, act_t / 0.9)
-        jump_dy = -70 * s * math.sin(math.pi * ph)
+        jump_dy, crouch, _ = _jump_phases(act_t, s)
+        hip_drop += crouch
         bob = 0.0
     elif activity == "walk":
         bob = 2.5 * s * abs(math.cos(w))
@@ -188,7 +241,12 @@ def draw_actor(
             a2 = -1.35 * max(0.0, math.sin(wr + ph - math.pi / 2))
             legs.append(limb(hip, L1, L2, a1, a2))
     elif activity == "jump":
-        tuck = 0.5 * math.sin(math.pi * min(1.0, act_t / 0.9))
+        if act_t < 0.16:        # anticipation crouch: knees bend
+            tuck = 0.42 * _smooth(act_t / 0.16)
+        elif act_t < 0.86:      # airborne tuck
+            tuck = 0.5 * math.sin(math.pi * (act_t - 0.16) / 0.70)
+        else:                   # landing: absorb with bent knees
+            tuck = 0.30 * math.sin(math.pi * min(1.0, (act_t - 0.86) / 0.24))
         legs = [limb(hip, L1, L2, 0.3 * tuck + 0.1, -1.4 * tuck),
                 limb(hip, L1, L2, -0.3 * tuck - 0.1, -1.2 * tuck)]
     elif activity == "dance":
@@ -214,7 +272,16 @@ def draw_actor(
         wavea = math.pi - 0.5 + 0.45 * math.sin(2 * math.pi * 2.2 * act_t)
         arms = [limb(shoulder, A1, A2, arm_base, 0.2, -1.0),
                 limb(shoulder, A1, A2, math.pi * 0.82, wavea - math.pi * 0.82)]
-    elif activity == "jump" or (activity == "idle" and emotion == "excited"):
+    elif activity == "jump":
+        if act_t < 0.16:        # wind-up: arms swing behind for momentum
+            k = _smooth(act_t / 0.16)
+            arms = [limb(shoulder, A1, A2, -0.55 * k + 0.1, -0.2 * k, -1.0),
+                    limb(shoulder, A1, A2, -0.55 * k + 0.1, -0.2 * k)]
+        else:                   # airborne / landing: arms flung up
+            up = math.pi * 0.75
+            arms = [limb(shoulder, A1, A2, up, 0.35, -1.0),
+                    limb(shoulder, A1, A2, up, 0.35)]
+    elif activity == "idle" and emotion == "excited":
         up = math.pi * 0.75
         arms = [limb(shoulder, A1, A2, up, 0.35, -1.0),
                 limb(shoulder, A1, A2, up, 0.35)]
@@ -324,7 +391,8 @@ def draw_actor(
     d.ellipse([head_c[0] - head_r, head_c[1] - head_r,
                head_c[0] + head_r, head_c[1] + head_r], fill=SKIN)
     _cir(d, head_c, head_r, color, W)
-    _draw_hair(d, head_c, head_r, facing, vis.hair, vis.hair_color, s)
+    hv = max(-1.0, min(1.0, vel / 430.0)) + 0.35 * settle * facing
+    _draw_hair(d, head_c, head_r, facing, vis.hair, vis.hair_color, s, hv, t)
 
     for ex in extras:
         if ex[0] == "line":
@@ -337,7 +405,7 @@ def draw_actor(
                   fill=ex[3], width=max(2, round(2.4 * s)))
 
     _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s,
-               mouth=mouth)
+               mouth=mouth, gaze=gaze, blink_seed=blink_seed)
     _draw_badge(d, (head_c[0], head_c[1] - head_r), emotion, t, s)
     return (head_c[0], head_c[1] - head_r)
 
@@ -347,13 +415,18 @@ def _mix_c(a: Tuple[int, int, int], b: Tuple[int, int, int], t: float) -> Tuple[
 
 
 def _draw_hair(d: ImageDraw.ImageDraw, head_c: Point, head_r: float,
-               facing: float, style: str, hair_color, s: float) -> None:
+               facing: float, style: str, hair_color, s: float,
+               hv: float = 0.0, t: float = 0.0) -> None:
+    """hv is the follow-through drag (-1..1): hair trails opposite to motion
+    and keeps swaying gently at rest so it never looks glued on."""
     hx, hy = head_c
     ow = max(2, round(2.2 * s))
+    drag = -hv * 9 * s + 1.1 * s * math.sin(2 * math.pi * t / 2.1)
     if style == "curly":
         for i in range(6):
             a = math.pi + (i + 0.5) * math.pi / 6   # across the top arc
-            cx = hx + (head_r * 0.95) * math.cos(a)
+            lift = max(0.0, -math.sin(a))           # top curls trail the most
+            cx = hx + (head_r * 0.95) * math.cos(a) + drag * 0.55 * lift
             cy = hy + (head_r * 0.95) * math.sin(a)
             r = (7.5 - abs(i - 2.5)) * s + 3 * s
             d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=hair_color)
@@ -362,35 +435,92 @@ def _draw_hair(d: ImageDraw.ImageDraw, head_c: Point, head_r: float,
                 195, 345, fill=hair_color)
         for i in range(3):
             x0 = hx - head_r * 0.5 + i * head_r * 0.42
-            d.line([(x0, hy - head_r * 0.55), (x0 + facing * 5 * s, hy - head_r * 0.9)],
+            d.line([(x0, hy - head_r * 0.55),
+                    (x0 + facing * 5 * s + drag * 0.6, hy - head_r * 0.9)],
                    fill=_mix_c(hair_color, (0, 0, 0), 0.3), width=ow)
     elif style == "bun":
         d.chord([hx - head_r, hy - head_r, hx + head_r, hy + head_r],
                 190, 350, fill=hair_color)
-        bx = hx - facing * head_r * 0.75
-        by = hy - head_r * 0.95
+        bx = hx - facing * head_r * 0.75 + drag * 0.8
+        by = hy - head_r * 0.95 + abs(drag) * 0.15
         r = 10 * s
         d.ellipse([bx - r, by - r, bx + r, by + r], fill=hair_color)
     else:  # spiky
         for i in range(5):
             a = math.pi + (i + 0.7) * math.pi / 6.2
+            lift = max(0.0, -math.sin(a))
             bx = hx + head_r * 0.92 * math.cos(a)
             by = hy + head_r * 0.92 * math.sin(a)
-            tipx = hx + head_r * 1.45 * math.cos(a) + facing * 3 * s
+            tipx = hx + head_r * 1.45 * math.cos(a) + facing * 3 * s + drag * lift
             tipy = hy + head_r * 1.45 * math.sin(a)
             wx, wy = -math.sin(a) * 7 * s, math.cos(a) * 7 * s
             d.polygon([(bx - wx, by - wy), (tipx, tipy), (bx + wx, by + wy)],
                       fill=hair_color)
 
 
+# eyebrow spec per emotion: (lift in s-units, inner_drop, outer_drop)
+# inner = toward the nose. Positive drop moves that end down.
+_BROWS = {
+    "neutral":   (10.5, 0.0, 0.0),
+    "happy":     (12.5, 0.5, 1.5),
+    "surprised": (15.0, 0.0, 1.0),
+    "scared":    (14.0, -1.5, 2.0),
+    "excited":   (13.5, 0.0, 1.5),
+    "love":      (12.0, 1.0, 2.0),
+}
+
+
+def _draw_brows(d, fx, eye_y, eye_dx, emotion, color, s, blink=False):
+    ow = max(2, round(2.4 * s))
+    if emotion == "angry":
+        for side in (-1, 1):
+            ex = fx + side * eye_dx
+            _line(d, [(ex - 5 * s, eye_y - 10 * s + (2 * s if side < 0 else 0)),
+                      (ex + 5 * s, eye_y - 6 * s - (2 * s if side < 0 else 0))][::side],
+                  color, max(2, round(2.6 * s)))
+        return
+    if emotion == "sad":
+        for side in (-1, 1):
+            ex = fx + side * eye_dx
+            _line(d, [(ex - side * 5 * s, eye_y - 9 * s), (ex + side * 4 * s, eye_y - 6 * s)],
+                  color, max(2, round(2.2 * s)))
+        return
+    lift, inner, outer = _BROWS.get(emotion, _BROWS["neutral"])
+    if blink:
+        lift -= 2.0
+    for side in (-1, 1):
+        ex = fx + side * eye_dx
+        by = eye_y - lift * s
+        # three-point polyline reads as a hand-drawn brow arc
+        pts = [(ex - side * 5 * s, by + inner * s),
+               (ex, by - 1.2 * s),
+               (ex + side * 5 * s, by + outer * s)]
+        _line(d, pts, color, ow)
+
+
+def _draw_pupil(d, ex, eye_y, gaze, color, s, r=2.6):
+    px = ex + (gaze or 0.0) * 3.0 * s
+    _dot(d, (px, eye_y + 0.4 * s), r * s, color)
+
+
+def _mouth_corner_bias(emotion):
+    """Vertical corner offset while talking: smiles curl up, sadness down."""
+    if emotion in ("happy", "excited", "love"):
+        return -1.0
+    if emotion in ("sad", "scared"):
+        return 1.0
+    return 0.0
+
+
 def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s,
-               mouth=None):
+               mouth=None, gaze=None, blink_seed=0.0):
     fx = head_c[0] + facing * 4 * s
     fy = head_c[1]
     eye_dx = 8 * s
     eye_y = fy - 5 * s
 
     if activity == "cry":
+        _draw_brows(d, fx, eye_y, eye_dx, "sad", color, s)
         for side in (-1, 1):
             ex = fx + side * eye_dx
             _line(d, [(ex - 3.5 * s, eye_y), (ex + 3.5 * s, eye_y)], color,
@@ -403,6 +533,7 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
               fill=color, width=max(2, round(2.6 * s)))
         return
     if activity == "laugh":
+        _draw_brows(d, fx, eye_y, eye_dx, "happy", color, s)
         for side in (-1, 1):
             ex = fx + side * eye_dx
             d.arc([ex - 4 * s, eye_y - 4 * s, ex + 4 * s, eye_y + 3 * s], 200, 340,
@@ -412,7 +543,8 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
                   outline=color, width=max(2, round(2.6 * s)))
         return
 
-    blink = (t % 3.4) < 0.13 and emotion not in ("surprised", "scared")
+    period = 3.1 + (blink_seed % 1.0) * 1.4
+    blink = ((t + blink_seed) % period) < 0.13 and emotion not in ("surprised", "scared")
 
     for side in (-1, 1):
         ex = fx + side * eye_dx
@@ -420,25 +552,16 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
             _line(d, [(ex - 3 * s, eye_y), (ex + 3 * s, eye_y)], color, max(2, round(2.5 * s)))
         elif emotion in ("surprised", "scared"):
             _cir(d, (ex, eye_y), 4.5 * s, color, max(2, round(2.2 * s)))
+            _draw_pupil(d, ex, eye_y, gaze, color, s, r=1.8)
         elif emotion == "love":
             _heart(d, (ex, eye_y), 5.5 * s, (184, 69, 60))
         elif emotion == "happy" or emotion == "excited":
             d.arc([ex - 4 * s, eye_y - 4 * s, ex + 4 * s, eye_y + 3 * s], 200, 340,
                   fill=color, width=max(2, round(2.4 * s)))
         else:
-            _dot(d, (ex, eye_y), 2.6 * s, color)
+            _draw_pupil(d, ex, eye_y, gaze, color, s)
 
-    if emotion == "angry":
-        for side in (-1, 1):
-            ex = fx + side * eye_dx
-            _line(d, [(ex - 5 * s, eye_y - 10 * s + (2 * s if side < 0 else 0)),
-                      (ex + 5 * s, eye_y - 6 * s - (2 * s if side < 0 else 0))][::side],
-                  color, max(2, round(2.6 * s)))
-    elif emotion == "sad":
-        for side in (-1, 1):
-            ex = fx + side * eye_dx
-            _line(d, [(ex - side * 5 * s, eye_y - 9 * s), (ex + side * 4 * s, eye_y - 6 * s)],
-                  color, max(2, round(2.2 * s)))
+    _draw_brows(d, fx, eye_y, eye_dx, emotion, color, s, blink=blink)
 
     my = fy + 9 * s
     mw = 9 * s
@@ -449,9 +572,11 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
             open01 = abs(math.sin(2 * math.pi * 3.1 * t))
             shape01 = 0.4
         ow = max(2, round(2.4 * s))
+        bias = _mouth_corner_bias(emotion)
         if open01 < 0.09:
-            # between words / syllables: lips closed
-            _line(d, [(fx - 5 * s, my), (fx + 5 * s, my)], color, ow)
+            # between words / syllables: lips closed (curved by emotion)
+            _line(d, [(fx - 5 * s, my + bias * 1.6 * s), (fx, my + bias * 0.2 * s),
+                      (fx + 5 * s, my + bias * 1.6 * s)], color, ow)
         else:
             # loudness opens the mouth; high-frequency sounds widen and
             # flatten it (ee/ss), low-frequency vowels round it (ah/oh)
@@ -463,6 +588,12 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
             else:
                 d.ellipse([fx - mw2, my - oh / 2, fx + mw2, my + oh / 2],
                           outline=color, width=ow)
+            if bias:
+                # corner ticks keep the emotion readable mid-speech
+                for side in (-1, 1):
+                    cx0 = fx + side * mw2
+                    _line(d, [(cx0, my), (cx0 + side * 2.4 * s, my - bias * 2.6 * s)],
+                          color, max(2, round(2 * s)))
         return
     if emotion in ("happy", "excited", "love"):
         d.arc([fx - mw, my - 6 * s, fx + mw, my + 6 * s], 15, 165,
@@ -556,7 +687,8 @@ def draw_speech_bubble(
 
     pad = round(16 * scale)
     bw, bh = tw + 2 * pad, th + 2 * pad
-    pop = min(1.0, age / 0.18)          # quick pop-in
+    p = min(1.0, age / 0.22)            # quick pop-in with a springy overshoot
+    pop = _smooth(p) * (1.0 + 0.10 * math.sin(math.pi * p))
     bw, bh = bw * pop, bh * pop
 
     hx, hy = head_anchor
@@ -574,7 +706,7 @@ def draw_speech_bubble(
     d.polygon([t0, (t0[0] + side * 26, by + bh - 12 * pop), (hx + side * 8, hy - 34)],
               fill=(255, 255, 253), outline=ink)
 
-    if pop >= 1.0:
+    if p >= 1.0:
         ty = by + pad
         for ln in lines:
             lw = d.textlength(ln, font=font)
