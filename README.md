@@ -71,8 +71,12 @@ it out:
   back, hand on belly, ha-ha marks), and sit (drops down to the ground).
   Actors can also **run** — a faster, leaning stride for urgency and chases.
 - **Dialogue** is spoken with a distinct neural voice per character
-  (male/female, language follows `--voice`), an animated talking mouth, and
-  a hand-drawn speech bubble that pops in above the speaker.
+  (male/female, language follows `--voice`) and a hand-drawn speech bubble
+  that pops in above the speaker. The mouth is **lip-synced to the actual
+  audio**: a per-frame RMS envelope drives how far it opens (lips close in
+  the silences between words), and the zero-crossing rate picks the shape —
+  round open vowels vs. wide flat consonants, with a dark mouth interior
+  when wide open.
 - **The world moves too**: the same prop library used by explainer mode
   (sun, clouds, trees, houses, cars with spinning wheels, balloons,
   kites, rain, birds...) with motions — a balloon can drift away mid-story,

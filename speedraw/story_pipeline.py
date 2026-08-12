@@ -62,6 +62,46 @@ class TimedEvent:
     x0: float = 0.0
     x1: float = 0.0
     wav: Optional[Path] = None
+    mouth: Optional[List[Tuple[float, float]]] = None  # (open, shape) per frame
+
+
+def _mouth_track(wav_path: Path, fps: int) -> List[Tuple[float, float]]:
+    """Per-video-frame lip-sync track from the speech audio.
+
+    Returns (open, shape) pairs: `open` is the normalized RMS loudness that
+    drives how far the mouth opens; `shape` is the zero-crossing rate that
+    separates round open vowels (low) from wide flat consonants (high).
+    """
+    import numpy as np
+
+    with wave.open(str(wav_path), "rb") as w:
+        rate = w.getframerate()
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32)
+    hop = max(1, int(rate / fps))
+    n = max(1, len(x) // hop)
+    opens, shapes = [], []
+    for i in range(n):
+        seg = x[i * hop:(i + 1) * hop]
+        if seg.size == 0:
+            break
+        opens.append(float(np.sqrt(np.mean(seg * seg))))
+        if seg.size > 1:
+            shapes.append(float(np.mean(np.abs(np.diff(np.sign(seg))) / 2)))
+        else:
+            shapes.append(0.0)
+    o = np.asarray(opens)
+    z = np.asarray(shapes)
+    ref = np.percentile(o[o > 0], 92) if (o > 0).any() else 1.0
+    o = np.clip(o / max(ref, 1e-6), 0.0, 1.0)
+    if o.size > 2:  # light smoothing so the mouth doesn't flicker at 30fps
+        o = np.convolve(o, [0.2, 0.6, 0.2], "same")
+    z = np.clip(z / 0.35, 0.0, 1.0)
+    if float(o.max(initial=0.0)) < 0.05:
+        # silent track (--tts none): fall back to a plausible syllable rhythm
+        t = np.arange(o.size) / fps
+        o = np.clip(0.5 + 0.5 * np.sin(2 * math.pi * 3.0 * t), 0, 1) * 0.8
+        z = np.full_like(o, 0.4)
+    return list(zip(o.tolist(), z.tolist()))
 
 
 @dataclass
@@ -192,6 +232,7 @@ def run_story_pipeline(
                                      voice=voices[ev.actor])
                     _to_std_wav(wav)
                     te.wav = wav
+                    te.mouth = _mouth_track(wav, fps)
                     te.dur = dur + 0.45
                 elif ev.action in ("walk", "run"):
                     speed = RUN_SPEED if ev.action == "run" else WALK_SPEED
@@ -251,7 +292,7 @@ def run_story_pipeline(
                 states = {
                     aid: {
                         "x": start_x[aid], "activity": "idle", "act_t": 0.0,
-                        "act_dur": 1.5, "talking": False,
+                        "act_dur": 1.5, "talking": False, "mouth": None,
                         "emotion": tracks[aid].emotion,
                         "facing": start_facing[aid], "bubble": None,
                     }
@@ -281,6 +322,9 @@ def run_story_pipeline(
                             st["act_t"] = tt - te.start
                             st["act_dur"] = te.dur
                         elif ev.action == "say":
+                            fi = int((tt - te.start) * fps)
+                            if te.mouth and 0 <= fi < len(te.mouth):
+                                st["mouth"] = te.mouth[fi]
                             st["talking"] = tt < te.start + te.dur - 0.35
                             st["bubble"] = (ev.text, tt - te.start)
 
@@ -298,6 +342,7 @@ def run_story_pipeline(
                         facing=st["facing"], emotion=st["emotion"], t=tt,
                         activity=st["activity"], act_t=st["act_t"],
                         act_dur=st["act_dur"], talking=st["talking"],
+                        mouth=st["mouth"],
                     )
                     if st["bubble"]:
                         bubbles.append((anchor, st["bubble"]))

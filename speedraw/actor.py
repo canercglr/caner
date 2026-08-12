@@ -81,6 +81,7 @@ def draw_actor(
     act_t: float = 0.0,         # time within the activity
     act_dur: float = 1.5,       # planned duration of the activity
     talking: bool = False,
+    mouth: Optional[Tuple[float, float]] = None,  # lip-sync (open, shape) 0-1
 ) -> Point:
     """Draw the actor; returns the head-top anchor (for badges/bubbles)."""
     s = vis.scale
@@ -276,12 +277,14 @@ def draw_actor(
             d.arc([c[0] - r, c[1] - r, c[0] + r, c[1] + r], 200, 340,
                   fill=ex[3], width=max(2, round(2.4 * s)))
 
-    _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s)
+    _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s,
+               mouth=mouth)
     _draw_badge(d, (head_c[0], head_c[1] - head_r), emotion, t, s)
     return (head_c[0], head_c[1] - head_r)
 
 
-def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s):
+def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s,
+               mouth=None):
     fx = head_c[0] + facing * 4 * s
     fy = head_c[1]
     eye_dx = 8 * s
@@ -340,9 +343,26 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
     my = fy + 9 * s
     mw = 9 * s
     if talking:
-        oh = (3.5 + 5.5 * abs(math.sin(2 * math.pi * 3.1 * t))) * s
-        d.ellipse([fx - 5 * s, my - oh / 2, fx + 5 * s, my + oh / 2],
-                  outline=color, width=max(2, round(2.4 * s)))
+        if mouth is not None:
+            open01, shape01 = mouth
+        else:  # no audio track available — fall back to a talking rhythm
+            open01 = abs(math.sin(2 * math.pi * 3.1 * t))
+            shape01 = 0.4
+        ow = max(2, round(2.4 * s))
+        if open01 < 0.09:
+            # between words / syllables: lips closed
+            _line(d, [(fx - 5 * s, my), (fx + 5 * s, my)], color, ow)
+        else:
+            # loudness opens the mouth; high-frequency sounds widen and
+            # flatten it (ee/ss), low-frequency vowels round it (ah/oh)
+            mw2 = (4.5 + 5.0 * shape01) * s
+            oh = (1.5 + 10.0 * open01) * s * (1.0 - 0.45 * shape01)
+            if oh > 5.5 * s:  # wide open: show a dark mouth interior
+                d.ellipse([fx - mw2, my - oh / 2, fx + mw2, my + oh / 2],
+                          fill=(94, 52, 50), outline=color, width=ow)
+            else:
+                d.ellipse([fx - mw2, my - oh / 2, fx + mw2, my + oh / 2],
+                          outline=color, width=ow)
         return
     if emotion in ("happy", "excited", "love"):
         d.arc([fx - mw, my - 6 * s, fx + mw, my + 6 * s], 15, 165,
