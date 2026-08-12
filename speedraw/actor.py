@@ -19,7 +19,20 @@ Point = Tuple[float, float]
 
 EMOTIONS = ("neutral", "happy", "sad", "angry", "surprised", "scared",
             "excited", "love")
-GESTURES = ("wave", "jump", "point_left", "point_right", "dance", "nod")
+GESTURES = ("wave", "jump", "point_left", "point_right", "dance", "nod",
+            "shake", "clap", "bow", "shrug", "facepalm", "think", "cry",
+            "laugh", "cheer", "sit")
+
+
+def _ease(act_t: float, act_dur: float, ramp: float = 0.35) -> float:
+    """0->1->0 envelope: ease in, hold, ease out over the activity."""
+    if act_dur <= 2 * ramp:
+        return math.sin(math.pi * min(1.0, act_t / max(act_dur, 1e-3)))
+    if act_t < ramp:
+        return act_t / ramp
+    if act_t > act_dur - ramp:
+        return max(0.0, (act_dur - act_t) / ramp)
+    return 1.0
 
 # posture per emotion: (head_dy, lean, arm_base) — arm_base is the resting
 # arm angle from straight down (positive = away from body)
@@ -64,8 +77,9 @@ def draw_actor(
     facing: float = 1.0,
     emotion: str = "neutral",
     t: float = 0.0,             # global time, drives idle bob / blink / cycles
-    activity: str = "idle",     # idle | walk | wave | jump | point_left|right | dance | nod
+    activity: str = "idle",     # idle | walk | run | any GESTURES entry
     act_t: float = 0.0,         # time within the activity
+    act_dur: float = 1.5,       # planned duration of the activity
     talking: bool = False,
 ) -> Point:
     """Draw the actor; returns the head-top anchor (for badges/bubbles)."""
@@ -75,22 +89,49 @@ def draw_actor(
 
     head_dy, lean, arm_base = _POSTURE.get(emotion, _POSTURE["neutral"])
     head_dy *= s
+    e = _ease(act_t, act_dur)
 
     bob = 2.2 * s * math.sin(2 * math.pi * t / 2.8)
     jump_dy = 0.0
+    hip_drop = 0.0
+    body_lean = lean            # forward lean in rad (positive = toward facing)
     w = 2 * math.pi * 1.8 * act_t
+    wr = 2 * math.pi * 2.6 * act_t
 
     if activity == "jump":
         ph = min(1.0, act_t / 0.9)
         jump_dy = -70 * s * math.sin(math.pi * ph)
         bob = 0.0
-    if activity == "walk":
+    elif activity == "walk":
         bob = 2.5 * s * abs(math.cos(w))
+    elif activity == "run":
+        bob = 3.6 * s * abs(math.cos(wr))
+        body_lean += 0.22
+    elif activity == "cheer":
+        jump_dy = -10 * s * abs(math.sin(2 * math.pi * 2.2 * act_t))
+    elif activity == "sit":
+        hip_drop = 62 * s * e
+    elif activity == "bow":
+        body_lean += 0.85 * e
+    elif activity == "laugh":
+        body_lean -= 0.34 * e
+        bob = 1.8 * s * math.sin(2 * math.pi * 5 * act_t)
+    elif activity == "cry":
+        head_dy += 7 * s
 
     Y = ground_y + jump_dy
-    hip = (x, Y - 92 * s + bob * 0.4)
-    shoulder = (x + facing * lean * 40 * s, Y - 148 * s + bob)
-    head_c = (shoulder[0] + facing * 5 * s, Y - 174 * s + bob + head_dy)
+    hip = (x, Y - 92 * s + hip_drop + bob * 0.4)
+    bvx, bvy = facing * math.sin(body_lean), -math.cos(body_lean)
+    shoulder = (hip[0] + bvx * 56 * s, hip[1] + bvy * 56 * s + bob * 0.6)
+    if activity == "cry":
+        shoulder = (shoulder[0] + 1.6 * s * math.sin(2 * math.pi * 7 * act_t), shoulder[1])
+    head_c = [shoulder[0] + bvx * 26 * s + facing * 4 * s * math.cos(body_lean),
+              shoulder[1] + bvy * 26 * s + head_dy]
+    if activity == "nod":
+        head_c[1] += 6 * s * abs(math.sin(2 * math.pi * 1.9 * act_t)) * e
+    elif activity == "shake":
+        head_c[0] += 7 * s * math.sin(2 * math.pi * 2.4 * act_t) * e
+    head_c = (head_c[0], head_c[1])
     head_r = 23 * s
 
     def limb(origin: Point, l1: float, l2: float, a1: float, a2: float,
@@ -102,6 +143,8 @@ def draw_actor(
         ey = jy + math.cos(a1 + a2) * l2
         return [origin, (jx, jy), (ex, ey)]
 
+    extras: List = []           # drawn after the body (marks, dots)
+
     # ---- legs -------------------------------------------------------------
     L1, L2 = 48 * s, 46 * s
     if activity == "walk":
@@ -109,6 +152,12 @@ def draw_actor(
         for ph in (0.0, math.pi):
             a1 = 0.55 * math.sin(w + ph)
             a2 = -0.85 * max(0.0, math.sin(w + ph - math.pi / 2))
+            legs.append(limb(hip, L1, L2, a1, a2))
+    elif activity == "run":
+        legs = []
+        for ph in (0.0, math.pi):
+            a1 = 0.85 * math.sin(wr + ph) + 0.1
+            a2 = -1.35 * max(0.0, math.sin(wr + ph - math.pi / 2))
             legs.append(limb(hip, L1, L2, a1, a2))
     elif activity == "jump":
         tuck = 0.5 * math.sin(math.pi * min(1.0, act_t / 0.9))
@@ -118,6 +167,10 @@ def draw_actor(
         k = math.sin(w * 0.9)
         legs = [limb(hip, L1, L2, 0.28 * k + 0.12, -0.4 * max(0.0, k)),
                 limb(hip, L1, L2, -0.28 * k - 0.12, -0.4 * max(0.0, -k))]
+    elif activity == "sit":
+        fold = e
+        legs = [limb(hip, L1, L2, 1.9 * fold + 0.13 * (1 - fold), -2.4 * fold),
+                limb(hip, L1 * 0.98, L2, 1.74 * fold - 0.13 * (1 - fold), -2.2 * fold)]
     else:
         legs = [limb(hip, L1, L2, 0.13, 0.0), limb(hip, L1, L2, -0.13, 0.0)]
 
@@ -126,27 +179,79 @@ def draw_actor(
     if activity == "walk":
         arms = [limb(shoulder, A1, A2, 0.7 * 0.55 * math.sin(w + math.pi), 0.35),
                 limb(shoulder, A1, A2, 0.7 * 0.55 * math.sin(w), 0.35)]
+    elif activity == "run":
+        arms = [limb(shoulder, A1, A2, 0.7 * math.sin(wr + math.pi), 1.0),
+                limb(shoulder, A1, A2, 0.7 * math.sin(wr), 1.0)]
     elif activity == "wave":
         wavea = math.pi - 0.5 + 0.45 * math.sin(2 * math.pi * 2.2 * act_t)
         arms = [limb(shoulder, A1, A2, arm_base, 0.2, -1.0),
                 limb(shoulder, A1, A2, math.pi * 0.82, wavea - math.pi * 0.82)]
-    elif activity == "jump" or emotion == "excited":
+    elif activity == "jump" or (activity == "idle" and emotion == "excited"):
         up = math.pi * 0.75
         arms = [limb(shoulder, A1, A2, up, 0.35, -1.0),
                 limb(shoulder, A1, A2, up, 0.35)]
     elif activity in ("point_left", "point_right"):
         pdir = 1.0 if activity == "point_right" else -1.0
-        raise_ph = min(1.0, act_t / 0.35)
-        pa = raise_ph * math.pi / 2
+        pa = min(1.0, act_t / 0.35) * math.pi / 2
         arms = [limb(shoulder, A1, A2, arm_base, 0.15, -pdir * facing),
                 limb(shoulder, A1, A2 * 1.05, pa, 0.0, pdir * facing)]
     elif activity == "dance":
         k = math.sin(w * 0.9)
         arms = [limb(shoulder, A1, A2, math.pi * 0.6 + 0.5 * k, 0.6, -1.0),
                 limb(shoulder, A1, A2, math.pi * 0.6 - 0.5 * k, 0.6)]
+    elif activity == "clap":
+        gap = 0.38 * max(0.0, math.sin(2 * math.pi * 3.2 * act_t))
+        arms = [limb(shoulder, A1, A2, 1.35 - gap, -0.5),
+                limb(shoulder, A1 * 0.97, A2, 1.35 + gap, -0.5)]
+        if gap < 0.08 and act_t > 0.2:
+            hx = (arms[0][-1][0] + arms[1][-1][0]) / 2
+            hy = (arms[0][-1][1] + arms[1][-1][1]) / 2
+            for a in (-0.7, 0.0, 0.7):
+                extras.append(("line", [(hx + facing * 12 * s * math.cos(a),
+                                         hy - 12 * s * math.sin(a) - 4 * s),
+                                        (hx + facing * 23 * s * math.cos(a),
+                                         hy - 23 * s * math.sin(a) - 6 * s)],
+                               (217, 144, 43), max(2, round(2.6 * s))))
+    elif activity == "bow":
+        arms = [limb(shoulder, A1, A2, 0.10, 0.05, -1.0),
+                limb(shoulder, A1, A2, 0.10, 0.05)]
+    elif activity == "shrug":
+        k = e
+        arms = [limb(shoulder, A1, A2, 0.45 * k, 2.3 * k, -1.0),
+                limb(shoulder, A1, A2, 0.45 * k, 2.3 * k)]
+    elif activity == "facepalm":
+        arms = [limb(shoulder, A1, A2, arm_base * 0.4, 0.08, -1.0),
+                limb(shoulder, A1, A2, 1.9 * e, 2.25 * e)]
+    elif activity == "think":
+        arms = [limb(shoulder, A1, A2, 0.35, -1.1, -1.0),
+                limb(shoulder, A1, A2, 1.55 * e, 2.5 * e)]
+        bx0, by0 = head_c[0] + facing * head_r * 1.4, head_c[1] - head_r * 1.2
+        for i, rr in enumerate((3.0, 4.4, 6.0)):
+            extras.append(("dotc", (bx0 + facing * i * 14 * s,
+                                    by0 - i * 16 * s), rr * s, color))
+    elif activity == "cry":
+        # one hand wiping the eyes, the other hanging limp
+        arms = [limb(shoulder, A1, A2, 0.14, 0.05, -1.0),
+                limb(shoulder, A1 * 0.98, A2, 1.3 * e, 2.75 * e)]
+    elif activity == "laugh":
+        # one hand on the belly, the other flung up
+        arms = [limb(shoulder, A1, A2, 0.42, -1.15),
+                limb(shoulder, A1, A2, 2.25, 0.3, -1.0)]
+        hx0 = head_c[0] + facing * head_r * 1.9
+        hy0 = head_c[1] - 6 * s - 12 * s * (act_t % 0.8)
+        for i in range(3):
+            extras.append(("arc", (hx0 + facing * i * 17 * s, hy0 - i * 11 * s),
+                           (9 - i * 1.5) * s, color))
+    elif activity == "cheer":
+        k = math.sin(2 * math.pi * 2.2 * act_t)
+        arms = [limb(shoulder, A1, A2, math.pi * 0.78 + 0.18 * k, 0.25, -1.0),
+                limb(shoulder, A1, A2, math.pi * 0.78 - 0.18 * k, 0.25)]
+    elif activity == "sit":
+        arms = [limb(shoulder, A1, A2, 0.55 * e + arm_base * (1 - e), -0.9 * e, -1.0),
+                limb(shoulder, A1, A2, 0.6 * e + arm_base * (1 - e), -0.95 * e)]
     elif emotion == "sad":
-        arms = [limb(shoulder, A1, A2, 0.04, 0.05, -1.0),
-                limb(shoulder, A1, A2, 0.04, 0.05)]
+        arms = [limb(shoulder, A1, A2, 0.12, 0.06, -1.0),
+                limb(shoulder, A1, A2, 0.12, 0.06)]
     elif emotion == "scared":
         arms = [limb(shoulder, A1, A2, math.pi * 0.55, 0.8, -1.0),
                 limb(shoulder, A1, A2, math.pi * 0.55, 0.8)]
@@ -155,11 +260,21 @@ def draw_actor(
                 limb(shoulder, A1, A2, arm_base, 0.12)]
 
     # ---- draw body --------------------------------------------------------
-    _line(d, [(head_c[0], head_c[1] + head_r), shoulder], color, W)
+    _line(d, [(head_c[0] - bvx * head_r, head_c[1] - bvy * head_r), shoulder], color, W)
     _line(d, [shoulder, hip], color, W)
     for limb_pts in arms + legs:
         _line(d, limb_pts, color, W)
     _cir(d, head_c, head_r, color, W)
+
+    for ex in extras:
+        if ex[0] == "line":
+            _line(d, ex[1], ex[2], ex[3])
+        elif ex[0] == "dotc":
+            _cir(d, ex[1], ex[2], ex[3], max(2, round(2.2 * s)))
+        elif ex[0] == "arc":
+            c, r = ex[1], ex[2]
+            d.arc([c[0] - r, c[1] - r, c[0] + r, c[1] + r], 200, 340,
+                  fill=ex[3], width=max(2, round(2.4 * s)))
 
     _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, s)
     _draw_badge(d, (head_c[0], head_c[1] - head_r), emotion, t, s)
@@ -171,6 +286,29 @@ def _draw_face(d, head_c, head_r, facing, emotion, t, activity, talking, color, 
     fy = head_c[1]
     eye_dx = 8 * s
     eye_y = fy - 5 * s
+
+    if activity == "cry":
+        for side in (-1, 1):
+            ex = fx + side * eye_dx
+            _line(d, [(ex - 3.5 * s, eye_y), (ex + 3.5 * s, eye_y)], color,
+                  max(2, round(2.5 * s)))
+            tl = (6 + 5 * abs(math.sin(2 * math.pi * 1.8 * t))) * s
+            _line(d, [(ex, eye_y + 4 * s), (ex - side * 2 * s, eye_y + 4 * s + tl)],
+                  (57, 114, 158), max(2, round(2.4 * s)))
+        my = fy + 10 * s
+        d.arc([fx - 8 * s, my, fx + 8 * s, my + 10 * s], 195, 345,
+              fill=color, width=max(2, round(2.6 * s)))
+        return
+    if activity == "laugh":
+        for side in (-1, 1):
+            ex = fx + side * eye_dx
+            d.arc([ex - 4 * s, eye_y - 4 * s, ex + 4 * s, eye_y + 3 * s], 200, 340,
+                  fill=color, width=max(2, round(2.4 * s)))
+        oh = (8 + 3 * abs(math.sin(2 * math.pi * 4 * t))) * s
+        d.ellipse([fx - 7 * s, fy + 4 * s, fx + 7 * s, fy + 4 * s + oh],
+                  outline=color, width=max(2, round(2.6 * s)))
+        return
+
     blink = (t % 3.4) < 0.13 and emotion not in ("surprised", "scared")
 
     for side in (-1, 1):

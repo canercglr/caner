@@ -65,7 +65,11 @@ it out:
 - **Emotions** (happy, sad, angry, surprised, scared, excited, love) change
   the face, the posture *and* a floating badge above the head — a `!`, a
   heart, anger marks, a sweat drop, or sparkles.
-- **Gestures**: wave, jump, point, dance.
+- **Gestures** (16): wave, jump, cheer, dance, clap (with spark marks on
+  contact), bow, nod, shake, shrug, point left/right, think (hand on chin +
+  thought dots), facepalm, cry (tears + sobbing shoulders), laugh (leaning
+  back, hand on belly, ha-ha marks), and sit (drops down to the ground).
+  Actors can also **run** — a faster, leaning stride for urgency and chases.
 - **Dialogue** is spoken with a distinct neural voice per character
   (male/female, language follows `--voice`), an animated talking mouth, and
   a hand-drawn speech bubble that pops in above the speaker.

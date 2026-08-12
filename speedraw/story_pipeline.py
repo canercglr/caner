@@ -38,7 +38,11 @@ ACTOR_COLORS = {
 }
 
 GESTURE_SECONDS = {"wave": 1.8, "jump": 1.1, "point_left": 1.5,
-                   "point_right": 1.5, "dance": 2.4}
+                   "point_right": 1.5, "dance": 2.4, "nod": 1.2, "shake": 1.4,
+                   "clap": 2.0, "bow": 1.9, "shrug": 1.7, "facepalm": 1.9,
+                   "think": 2.5, "cry": 2.7, "laugh": 2.3, "cheer": 2.1,
+                   "sit": 2.8}
+RUN_SPEED = 430.0           # px/s
 
 VOICE_MAP = {
     "en": {"female": "en-US-AriaNeural", "male": "en-US-GuyNeural"},
@@ -189,9 +193,10 @@ def run_story_pipeline(
                     _to_std_wav(wav)
                     te.wav = wav
                     te.dur = dur + 0.45
-                elif ev.action == "walk":
+                elif ev.action in ("walk", "run"):
+                    speed = RUN_SPEED if ev.action == "run" else WALK_SPEED
                     te.x1 = (ev.to_x if ev.to_x is not None else tr.x / sx) * sx
-                    te.dur = max(0.7, min(4.5, abs(te.x1 - te.x0) / (WALK_SPEED * sx)))
+                    te.dur = max(0.6, min(4.5, abs(te.x1 - te.x0) / (speed * sx)))
                     tr.x = te.x1
                     if abs(te.x1 - te.x0) > 8:
                         tr.facing = 1.0 if te.x1 > te.x0 else -1.0
@@ -246,7 +251,8 @@ def run_story_pipeline(
                 states = {
                     aid: {
                         "x": start_x[aid], "activity": "idle", "act_t": 0.0,
-                        "talking": False, "emotion": tracks[aid].emotion,
+                        "act_dur": 1.5, "talking": False,
+                        "emotion": tracks[aid].emotion,
                         "facing": start_facing[aid], "bubble": None,
                     }
                     for aid in aids
@@ -256,7 +262,7 @@ def run_story_pipeline(
                     st = states.get(ev.actor)
                     if st is None:
                         continue
-                    if ev.action == "walk" and tt >= te.start:
+                    if ev.action in ("walk", "run") and tt >= te.start:
                         if tt >= te.start + te.dur:
                             st["x"] = te.x1
                         else:
@@ -267,11 +273,13 @@ def run_story_pipeline(
                     if ev.action in ("emote", "say") and tt >= te.start and ev.emotion:
                         st["emotion"] = ev.emotion
                     if te.start <= tt < te.start + te.dur:
-                        if ev.action == "walk":
-                            st["activity"], st["act_t"] = "walk", tt - te.start
+                        if ev.action in ("walk", "run"):
+                            st["activity"], st["act_t"] = ev.action, tt - te.start
+                            st["act_dur"] = te.dur
                         elif ev.action == "gesture":
                             st["activity"] = ev.gesture or "wave"
                             st["act_t"] = tt - te.start
+                            st["act_dur"] = te.dur
                         elif ev.action == "say":
                             st["talking"] = tt < te.start + te.dur - 0.35
                             st["bubble"] = (ev.text, tt - te.start)
@@ -289,7 +297,7 @@ def run_story_pipeline(
                         d, st["x"], ground, tracks[aid].visual,
                         facing=st["facing"], emotion=st["emotion"], t=tt,
                         activity=st["activity"], act_t=st["act_t"],
-                        talking=st["talking"],
+                        act_dur=st["act_dur"], talking=st["talking"],
                     )
                     if st["bubble"]:
                         bubbles.append((anchor, st["bubble"]))

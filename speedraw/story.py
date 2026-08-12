@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 Emotion = Literal["neutral", "happy", "sad", "angry", "surprised", "scared",
                   "excited", "love"]
-Gesture = Literal["wave", "jump", "point_left", "point_right", "dance"]
+Gesture = Literal["wave", "jump", "point_left", "point_right", "dance", "nod",
+                  "shake", "clap", "bow", "shrug", "facepalm", "think", "cry",
+                  "laugh", "cheer", "sit"]
 PropKind = Literal["sun", "moon", "star", "cloud", "rain", "tree", "bush",
                    "mountain", "flower", "grass", "rock", "house", "bench",
                    "car", "ball", "balloon", "bird", "kite"]
@@ -41,7 +43,7 @@ class StoryProp(BaseModel):
 
 class StoryEvent(BaseModel):
     actor: str = Field(description="actor id this event belongs to")
-    action: Literal["say", "walk", "emote", "gesture", "wait"]
+    action: Literal["say", "walk", "run", "emote", "gesture", "wait"]
     text: Optional[str] = Field(
         default=None,
         description="for say: one short spoken line, max ~70 characters",
@@ -50,7 +52,7 @@ class StoryEvent(BaseModel):
         default=None, description="for emote (also allowed alongside say)"
     )
     to_x: Optional[float] = Field(
-        default=None, description="for walk: destination x (may be off-screen)"
+        default=None, description="for walk/run: destination x (may be off-screen)"
     )
     gesture: Optional[Gesture] = None
     seconds: Optional[float] = Field(default=None, description="for wait")
@@ -79,9 +81,25 @@ Craft rules:
   (happy, sad, angry, surprised, scared, excited, love) at the turning points.
 - Dialogue lines are short and speakable (max ~70 chars). Characters talk TO
   each other. Give each actor a distinct personality.
-- Movement sells the story: walk actors between positions (x 120-1160,
-  off-screen entries/exits via x < 0 or > 1280), and use gestures (wave,
-  jump, point_left/right, dance) at emotional beats.
+- Movement sells the story: walk or run actors between positions (x 120-1160,
+  off-screen entries/exits via x < 0 or > 1280; run for urgency, excitement
+  or chases), and use the gesture vocabulary at emotional beats:
+    wave        greeting or goodbye
+    jump        single joyful hop
+    cheer       arms pumping overhead
+    dance       celebration groove
+    clap        applause (with spark marks on each clap)
+    bow         thanks / apology / performance ending
+    nod         agreeing        shake: refusing
+    shrug       "I don't know", arms out palms up
+    point_left / point_right    pointing at something
+    think       hand on chin + thought dots
+    facepalm    exasperation
+    cry         hands to eyes, tears streaming (pair with emotion sad)
+    laugh       leaning back, big open mouth, ha-ha marks
+    sit         sits down on the ground (nice for calm or defeated beats)
+  Pick the gesture that matches the line just spoken or the emotion just
+  set — a story beat lands hardest as say -> emote -> gesture.
 - Events run one at a time, in order. Keep 4-9 per shot.
 - Dress each shot with 3-7 props, and give 1-3 of them motion so the world
   feels alive: clouds drift, a balloon rises, a ball bounces, rain falls,
@@ -155,11 +173,14 @@ DEMO_STORY = Story(
                 StoryEvent(actor="pip", action="say", text="Oh no! Come back!", emotion="surprised"),
                 StoryEvent(actor="pip", action="gesture", gesture="point_right"),
                 StoryEvent(actor="pip", action="emote", emotion="sad"),
-                StoryEvent(actor="pip", action="say", text="My balloon is gone forever...",
-                           emotion="sad"),
-                StoryEvent(actor="momo", action="walk", to_x=820),
-                StoryEvent(actor="momo", action="say", text="Hey Pip! Why the long face?"),
-                StoryEvent(actor="pip", action="say", text="The wind took my balloon.", emotion="sad"),
+                StoryEvent(actor="pip", action="gesture", gesture="cry"),
+                StoryEvent(actor="pip", action="gesture", gesture="sit"),
+                StoryEvent(actor="momo", action="run", to_x=820),
+                StoryEvent(actor="momo", action="say", text="Pip! I saw your balloon fly off!"),
+                StoryEvent(actor="pip", action="say", text="It's gone forever...", emotion="sad"),
+                StoryEvent(actor="momo", action="gesture", gesture="think"),
+                StoryEvent(actor="momo", action="say", text="Hmm... wait right here!", emotion="excited"),
+                StoryEvent(actor="momo", action="run", to_x=1360),
             ],
         ),
         StoryShot(
@@ -172,16 +193,20 @@ DEMO_STORY = Story(
                 StoryProp(kind="flower", x=350, y=585, scale=1.2, motion="sway"),
             ],
             events=[
-                StoryEvent(actor="momo", action="say", text="Cheer up! Look what I brought!",
+                StoryEvent(actor="momo", action="run", to_x=820),
+                StoryEvent(actor="momo", action="say", text="Ta-da! Look what I brought!",
                            emotion="happy"),
                 StoryEvent(actor="momo", action="gesture", gesture="point_left"),
                 StoryEvent(actor="pip", action="emote", emotion="surprised"),
                 StoryEvent(actor="pip", action="say", text="A kite?! That's even better!",
                            emotion="excited"),
-                StoryEvent(actor="pip", action="gesture", gesture="jump"),
-                StoryEvent(actor="momo", action="gesture", gesture="dance"),
+                StoryEvent(actor="pip", action="gesture", gesture="laugh"),
+                StoryEvent(actor="momo", action="gesture", gesture="clap"),
+                StoryEvent(actor="pip", action="gesture", gesture="cheer"),
                 StoryEvent(actor="pip", action="say", text="You're the best, Momo!", emotion="love"),
-                StoryEvent(actor="momo", action="gesture", gesture="wave"),
+                StoryEvent(actor="momo", action="gesture", gesture="bow"),
+                StoryEvent(actor="momo", action="gesture", gesture="dance"),
+                StoryEvent(actor="pip", action="gesture", gesture="dance"),
             ],
         ),
     ],
