@@ -26,6 +26,10 @@ class Beat(BaseModel):
     emotion: AlienEmotion = "neutral"
     gesture: AlienGestureName = Field(
         default="none", description="acting gesture performed on this beat")
+    gesture2: AlienGestureName = Field(
+        default="none",
+        description="optional second gesture for the beat's second half — "
+                    "use it on longer lines so the acting keeps moving")
     camera: Framing = Field(
         default="medium", description="framing for this beat")
 
@@ -61,6 +65,11 @@ Craft rules:
     bow          thanks, endings
     count        listing things
     none         let a heavy line land without moving
+  Longer lines deserve TWO gestures: set gesture2 and the alien switches
+  acts halfway through the line (e.g. think -> open_arms as a realization
+  lands, or recoil -> facepalm). Between and around named gestures the
+  alien's hands gesticulate on their own, driven by the loudness of the
+  narration — so every beat is in motion.
 - Emotions drive the face, antennae and posture — change them at the
   turning points, don't leave the whole story on one feeling. "curious"
   (head tilt, one raised brow ridge) is great for hooks and questions.
@@ -104,23 +113,27 @@ DEMO_ALIEN_STORY = AlienStory(
         Beat(text="I was piloting my ship with my eyes closed. Don't judge me.",
              emotion="happy", gesture="shrug", camera="medium"),
         Beat(text="Suddenly the whole sky opened up — and there it was. Blue. Round. Glowing.",
-             emotion="excited", gesture="open_arms", camera="wide"),
+             emotion="excited", gesture="open_arms", gesture2="point_up",
+             camera="wide"),
         Beat(text="My navigation system said: 'that is a wet rock, ignore it.'",
              emotion="neutral", gesture="point_up", camera="medium"),
         Beat(text="But I got closer... and closer...",
              emotion="curious", gesture="none", camera="push_in"),
         Beat(text="And then your thunderstorm slapped my ship out of the sky.",
-             emotion="scared", gesture="recoil", camera="closeup"),
+             emotion="scared", gesture="recoil", gesture2="facepalm",
+             camera="closeup"),
         Beat(text="I crashed into something you call... a pumpkin field.",
              emotion="sad", gesture="facepalm", camera="medium"),
         Beat(text="For three days I hid. Cold. Alone. Covered in pumpkin.",
              emotion="sad", gesture="arms_cross", camera="closeup"),
         Beat(text="Then a small creature found me. Four legs. A tail. Extremely rude.",
-             emotion="surprised", gesture="count", camera="medium"),
+             emotion="surprised", gesture="count", gesture2="shrug",
+             camera="medium"),
         Beat(text="It licked my antenna... and my whole heart lit up like a star.",
              emotion="love", gesture="clasp", camera="push_in"),
         Beat(text="I stayed a whole year because of that dog. Best crash of my life.",
-             emotion="happy", gesture="jazz_hands", camera="medium"),
+             emotion="happy", gesture="jazz_hands", gesture2="clasp",
+             camera="medium"),
         Beat(text="So if your sky ever flashes green — that's just me, waving back.",
              emotion="love", gesture="wave", camera="pull_back"),
         Beat(text="Thank you for listening. Tell no one about the pumpkins.",

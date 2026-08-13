@@ -141,13 +141,20 @@ it out:
 ## Alien narrator mode
 
 `--alien` puts one big-eyed alien in a spotlight on a black stage and lets
-it perform a story straight to camera. Claude writes the monologue as
-**beats** — each one a spoken line plus acting directions — and the
-renderer plays the performance:
+it perform a story straight to camera, drawn in **thick white line art**
+on the dark — no colour, just confident strokes. Claude writes the
+monologue as **beats** — each one a spoken line plus acting directions —
+and the renderer plays the performance:
 
 - **Acting**: 14 gestures (open arms, pointing, shrug, think, facepalm,
   jazz hands, clasped hands, crossed arms, a shocked recoil, a bow...)
-  matched to the meaning of each line, with anticipation and settle.
+  matched to the meaning of each line, with anticipation and settle. A
+  long line can carry **two** gestures, switching mid-sentence. And the
+  limbs never stop: while the alien talks its hands gesticulate
+  continuously, **driven by the loudness of the narration** — loud words
+  push the hands outward, punch small emphasis nods into the head, and
+  flare the fingers; quiet stretches settle back down. A slow weight
+  shift keeps the body alive even between lines.
 - **Mimics**: huge glossy almond eyes with gaze, squints, eased blinks and
   twin highlights; brow ridges; antennae that perk up with excitement and
   droop with sadness; a breathing idle so the figure is never frozen.
@@ -157,11 +164,12 @@ renderer plays the performance:
   alien timbre without changing its timing.
 - **Camera**: each beat picks a framing — wide, medium, closeup, a slow
   `push_in` or a `pull_back` — and the virtual camera glides between them
-  with a gentle handheld drift. The figure is **redrawn from vectors at
-  the camera's exact zoom** every frame, so even extreme closeups stay
-  perfectly sharp.
+  with a gentle handheld drift. A safety clamp guarantees the head and
+  antennae stay in frame at every zoom. The figure is **redrawn from
+  vectors at the camera's exact zoom** every frame, so even extreme
+  closeups stay perfectly sharp.
 - **Stage**: black void with a twinkling parallax starfield, a soft
-  spotlight pool and a floor glow.
+  monochrome spotlight pool and a floor glow.
 
 ### Options
 

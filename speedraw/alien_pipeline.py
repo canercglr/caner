@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw
 
-from .alien import draw_alien, head_center_y
+from .alien import draw_alien, head_center_y, head_extent
 from .alien_story import AlienStory
 from .assembler import build_video
 from .pipeline import DEFAULT_MODEL, log
@@ -29,11 +29,11 @@ from .story_pipeline import AUDIO_RATE, _mouth_track, _shot_audio, _to_std_wav, 
 from .textcard import _TITLE_FONTS, _load_font
 from .voiceover import synthesize
 
-BG = (9, 11, 18)
-STAGE_GLOW = (30, 34, 50)
-GROUND_GLOW = (22, 26, 38)
-STAR = (82, 92, 122)
-TITLE_INK = (196, 214, 224)
+BG = (7, 9, 13)                 # matches alien.CORE — pure monochrome stage
+STAGE_GLOW = (24, 26, 30)
+GROUND_GLOW = (18, 20, 23)
+STAR = (105, 110, 120)
+TITLE_INK = (232, 236, 240)
 
 GROUND_W = 620.0            # world ground line y
 ALIEN_X = 640.0
@@ -135,12 +135,18 @@ def _framing_target(kind: str, prog: float) -> Tuple[float, float]:
     if kind == "wide":
         return 1.0, (head + GROUND_W) / 2 - 40
     if kind == "closeup":
-        return 3.0, head + 6
+        return 2.5, head + 16
     if kind == "push_in":
-        return 1.55 + 1.15 * prog, head + 30 - 24 * prog
+        return 1.5 + 0.85 * prog, head + 30 - 16 * prog
     if kind == "pull_back":
-        return 2.6 - 1.55 * prog, head + 10 + 60 * prog
+        return 2.3 - 1.3 * prog, head + 14 + 56 * prog
     return 1.8, mid          # medium
+
+
+def _head_safe_cy(cy: float, z: float) -> float:
+    """Clamp the camera so the head AND antennae always stay in frame."""
+    top = head_center_y(GROUND_W, ALIEN_S) - head_extent(ALIEN_S)
+    return min(cy, top + (360.0 - 14.0) / max(z, 1e-6))
 
 
 _GAZE_FOR_GESTURE = {"point_left": (-0.8, -0.1), "point_right": (0.8, -0.1),
@@ -218,6 +224,7 @@ def run_alien_pipeline(
         # ---- render --------------------------------------------------------
         head_y = head_center_y(GROUND_W, ALIEN_S)
         cam = [640.0, (head_y + GROUND_W) / 2, 1.12]
+        energy = 0.0            # smoothed narration loudness (drives limbs)
         for f in range(total_frames):
             tt = f / fps
 
@@ -244,6 +251,7 @@ def run_alien_pipeline(
             cam[0] += (tcx - cam[0]) * k
             cam[1] += (tcy - cam[1]) * k
             cam[2] += (tz - cam[2]) * k
+            cam[1] = _head_safe_cy(cam[1], cam[2])
             cx, cy, z = cam
 
             frame = _stage(canvas, (cx, cy, z), tt)
@@ -256,16 +264,32 @@ def run_alien_pipeline(
             mo = None
             if cur is not None:
                 emotion = cur.beat.emotion
-                if cur.beat.gesture != "none":
-                    gesture = cur.beat.gesture
-                    act_t = tt - cur.start
-                    act_dur = cur.dur
+                g1 = cur.beat.gesture
+                g2 = getattr(cur.beat, "gesture2", "none") or "none"
+                bt_t = tt - cur.start
+                if g2 != "none":
+                    # two acted gestures: one per half of the beat
+                    half = cur.dur * 0.5
+                    if bt_t < half:
+                        gesture = None if g1 == "none" else g1
+                        act_t, act_dur = bt_t, half
+                    else:
+                        gesture = g2
+                        act_t, act_dur = bt_t - half, cur.dur - half
+                elif g1 != "none":
+                    gesture = g1
+                    act_t, act_dur = bt_t, cur.dur
                 talking = tt < cur.start + cur.dur - 0.4
-                fi = int((tt - cur.start) * fps)
+                fi = int(bt_t * fps)
                 if cur.mouth and 0 <= fi < len(cur.mouth):
                     mo = cur.mouth[fi]
             elif tt < t0:
                 emotion = "happy"
+
+            # smoothed loudness: fast attack, slow decay — the limbs and
+            # head ride this so movement follows the words
+            cur_open = mo[0] if (mo and talking) else 0.0
+            energy = max(energy * 0.86, min(1.0, cur_open * 1.25))
 
             gz = _GAZE_FOR_GESTURE.get(gesture or "", None)
             if gz is None:
@@ -280,7 +304,7 @@ def run_alien_pipeline(
             draw_alien(ld, px * SS, pg * SS, ALIEN_S * z * ky * SS,
                        emotion=emotion, gesture=gesture, act_t=act_t,
                        act_dur=act_dur, talking=talking, mouth=mo,
-                       gaze=gz, t=tt)
+                       gaze=gz, t=tt, emphasis=energy)
             layer = layer.resize(canvas, Image.LANCZOS)
             frame.paste(layer, (0, 0), layer)
 
