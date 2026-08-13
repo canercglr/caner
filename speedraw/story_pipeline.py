@@ -531,10 +531,18 @@ def run_story_pipeline(
                     else:
                         gaze = st["facing"] * 0.35
 
-                    layer = Image.new("RGBA", canvas, (0, 0, 0, 0))
-                    ld = ImageDraw.Draw(layer)
+                    # actors draw at 2x and downscale — smooth antialiased
+                    # linework instead of jagged pixel edges
+                    from dataclasses import replace as _dc_replace
+
+                    SS = 2
+                    big = Image.new("RGBA", (canvas[0] * SS, canvas[1] * SS),
+                                    (0, 0, 0, 0))
+                    ld = ImageDraw.Draw(big)
                     anchor = draw_actor(
-                        ld, st["x"], ground, tracks[aid].visual,
+                        ld, st["x"] * SS, ground * SS,
+                        _dc_replace(tracks[aid].visual,
+                                    scale=tracks[aid].visual.scale * SS),
                         facing=st["facing"], emotion=st["emotion"], t=tt,
                         activity=st["activity"], act_t=st["act_t"],
                         act_dur=st["act_dur"], talking=st["talking"],
@@ -542,6 +550,8 @@ def run_story_pipeline(
                         gaze=gaze,
                         blink_seed=(hash(aid) % 97) / 13.0,
                     )
+                    anchor = (anchor[0] / SS, anchor[1] / SS)
+                    layer = big.resize(canvas, Image.LANCZOS)
                     # squash & stretch about the ground contact point
                     sxf, syf = body_stretch(st["activity"], st["act_t"],
                                             st["act_dur"])

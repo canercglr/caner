@@ -78,11 +78,15 @@ it out:
   far it opens, edge-tts word boundaries force the lips shut between words,
   and the zero-crossing rate picks the shape — round open vowels vs. wide
   flat consonants, with a dark mouth interior when wide open.
-- **Characters are chibi doodle people**: big heads (~40% of body height),
-  large white-sclera eyes with gaze-following pupils and a light catch,
-  blush cheeks, shirt-coloured torsos, four hair styles (spiky, curly,
-  flat, bun), skin-tone hands, shoes, and a soft ground shadow that
-  shrinks when they jump.
+- **Characters are cartoon humans** with real anatomy: ~6-head-height
+  proportions, arms that hang from actual shoulders, a neck, a collared
+  and hemmed shirt, trouser legs with knees, shoes with a toe, mitten
+  hands with thumbs, and an oval head with ears and a nose. Faces are
+  drawn in neutral ink — white-sclera eyes with coloured irises,
+  gaze-following pupils and a light catch, expressive brows, blush — and
+  every character renders at 2x supersampling for smooth, antialiased
+  linework. Four hair styles (spiky, curly, flat, bun) over a proper
+  scalp, and a soft ground shadow that shrinks when they jump.
 - **Classic animation principles** drive the movement. Jumps have
   anticipation (a crouch and arm wind-up), airborne stretch and a landing
   squash with bent knees — all **squash & stretch** is volume-preserving

@@ -125,7 +125,7 @@ Craft rules:
   motion "rise" in that shot). Pets (cat, dog), vehicles (car, bicycle,
   boat), places (house, fence, streetlamp, bench, campfire, mountain) let
   you stage richer worlds — use props that match the setting.
-- The ground line is at y=585. Actors are ~160px tall chibi characters.
+- The ground line is at y=585. Actors are ~185px tall cartoon people.
   Keep the sky area
   (y < 300) for sun/moon/clouds/stars and don't crowd the center where
   actors act.
