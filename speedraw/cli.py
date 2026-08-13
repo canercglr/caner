@@ -37,6 +37,11 @@ def main(argv=None) -> int:
                         help="story mode: an animated stick-figure story with "
                              "walking, emotions, gestures and spoken dialogue "
                              "instead of a speed-drawing explainer")
+    parser.add_argument("--alien", action="store_true",
+                        help="alien narrator mode: a single expressive alien "
+                             "on a black stage acts out a monologue straight "
+                             "to camera — gestures, mimics, lip sync and "
+                             "camera framing all follow the story")
     parser.add_argument("--scenes", type=int, default=4,
                         help="number of scenes to generate (default: 4)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -81,7 +86,25 @@ def main(argv=None) -> int:
         parser.error("--scenes must be between 1 and 12")
 
     try:
-        if args.story:
+        if args.alien:
+            from .alien_pipeline import run_alien_pipeline
+
+            run_alien_pipeline(
+                args.topic or "demo",
+                args.output,
+                model=args.model,
+                tts_engine=args.tts,
+                voice=args.voice,
+                canvas=args.size,
+                fps=args.fps,
+                demo=args.demo,
+                title_card=not args.no_title,
+                music=not args.no_music,
+                music_volume=args.music_volume if args.music_volume is not None else 0.16,
+                workdir=args.workdir,
+                keep_workdir=args.keep_workdir,
+            )
+        elif args.story:
             from .story_pipeline import run_story_pipeline
 
             run_story_pipeline(

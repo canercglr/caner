@@ -51,6 +51,11 @@ python -m speedraw --demo -o demo.mp4
 # characters walk, emote, gesture and speak with per-character voices
 python -m speedraw --story "A stick figure who is afraid of heights climbs a mountain"
 python -m speedraw --story --demo -o story.mp4   # offline demo story
+
+# ALIEN NARRATOR: a single expressive alien on a black stage performs a
+# monologue straight to camera — acting, mimics, lip sync and camera moves
+python -m speedraw --alien "How I accidentally discovered Earth"
+python -m speedraw --alien --demo -o alien.mp4   # offline demo monologue
 ```
 
 ## Story mode
@@ -132,6 +137,31 @@ it out:
   progression — no assets, no network) is mixed under the video and
   side-chain ducked beneath the dialogue. Works in explainer mode too;
   control with `--no-music` / `--music-volume`.
+
+## Alien narrator mode
+
+`--alien` puts one big-eyed alien in a spotlight on a black stage and lets
+it perform a story straight to camera. Claude writes the monologue as
+**beats** — each one a spoken line plus acting directions — and the
+renderer plays the performance:
+
+- **Acting**: 14 gestures (open arms, pointing, shrug, think, facepalm,
+  jazz hands, clasped hands, crossed arms, a shocked recoil, a bow...)
+  matched to the meaning of each line, with anticipation and settle.
+- **Mimics**: huge glossy almond eyes with gaze, squints, eased blinks and
+  twin highlights; brow ridges; antennae that perk up with excitement and
+  droop with sadness; a breathing idle so the figure is never frozen.
+- **Lip sync**: the same audio-envelope + letter-viseme system as story
+  mode — lips shut on m/b/p, round on o/u, wide on e/i — with a tongue
+  hint on wide-open vowels. The narration is pitch-shifted up for an
+  alien timbre without changing its timing.
+- **Camera**: each beat picks a framing — wide, medium, closeup, a slow
+  `push_in` or a `pull_back` — and the virtual camera glides between them
+  with a gentle handheld drift. The figure is **redrawn from vectors at
+  the camera's exact zoom** every frame, so even extreme closeups stay
+  perfectly sharp.
+- **Stage**: black void with a twinkling parallax starfield, a soft
+  spotlight pool and a floor glow.
 
 ### Options
 
